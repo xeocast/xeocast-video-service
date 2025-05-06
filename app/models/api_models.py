@@ -85,6 +85,10 @@ class TestCallbackResponse(BaseModel):
     received: bool
     error: Optional[str] = None
 
+# --- Test Callback Payload Model ---
+class TestCallbackPayload(BaseModel):
+    data: Dict[str, Any]
+
 # --- Error Models ---
 
 class ErrorResponse(BaseModel):

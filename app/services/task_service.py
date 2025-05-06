@@ -59,8 +59,10 @@ class TaskService:
     def set_task_completed(self, task_id: str, result: Dict) -> Optional[TaskMetadata]:
         """Convenience method to set task status to completed and add result."""
         with self._lock:
-            task = self.update_task_status(task_id, TaskStatus.COMPLETED)
+            task = self._tasks.get(task_id)
             if task:
+                task.status = TaskStatus.COMPLETED
+                task.error = None  # Explicitly clear any previous error
                 task.result = result
                 task.updated_at = datetime.utcnow()
             return task

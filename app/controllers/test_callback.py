@@ -1,7 +1,7 @@
-from fastapi import APIRouter, Request, HTTPException, status
+from fastapi import APIRouter, Request, HTTPException, status, Body
 import logging
 
-from app.models.api_models import TestCallbackResponse, ErrorResponse
+from app.models.api_models import TestCallbackResponse, ErrorResponse, TestCallbackPayload
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -14,11 +14,10 @@ logger = logging.getLogger(__name__)
     description="Accepts any JSON POST payload and logs it. Useful for testing callback handling.",
     responses={500: {"model": ErrorResponse}}
 )
-async def test_callback(request: Request):
+async def test_callback(payload: TestCallbackPayload = Body(...)):
     """Logs the received JSON payload from a POST request."""
     try:
-        payload = await request.json()
-        logger.info(f"Received test callback with payload: {payload}")
+        logger.info(f"Received test callback with payload: {payload.data}")
         return TestCallbackResponse(received=True)
     except Exception as e:
         logger.error(f"Error processing test callback: {e}", exc_info=True)
