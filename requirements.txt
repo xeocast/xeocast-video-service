@@ -5,6 +5,9 @@ pydantic-settings
 requests
 moviepy
 httpx
+librosa
+numpy
+opencv-python
 APScheduler # For scheduled cleanup tasks
 # Add youtube-related dependency when implemented
 google-api-python-client

@@ -4,7 +4,10 @@ from pathlib import Path
 import logging
 
 # Import moviepy components
-from moviepy import ImageClip, AudioFileClip, concatenate_videoclips
+from moviepy import ImageClip, AudioFileClip, concatenate_videoclips, VideoClip, CompositeVideoClip
+import librosa
+import numpy as np
+import cv2
 
 from app.models.settings import settings
 from app.services.file_downloader import file_downloader_service
@@ -29,38 +32,92 @@ class VideoService:
         logger.info(f"Starting video generation: image={image_path}, audio={audio_path}, output={output_path}")
 
         try:
-            # --- MoviePy Logic Start (Adapted from visualizer.py) ---
-            audio_clip = AudioFileClip(str(audio_path))
-            image_clip = ImageClip(str(image_path))
+            # Load audio with librosa for visualizer
+            y, sr = librosa.load(str(audio_path))
+            audio_duration = librosa.get_duration(y=y, sr=sr)
 
-            # Set the duration of the image clip to match the audio duration
-            image_clip = image_clip.with_duration(audio_clip.duration)
+            # Compute the mel spectrogram
+            melspec = librosa.feature.melspectrogram(y=y, sr=sr, n_mels=20) # Using 20 mel bands as in visualizer.py
+            max_val = np.max(melspec) if np.max(melspec) > 0 else 1.0 # Avoid division by zero
+            hop_length = 512  # Default hop length in librosa
 
-            # Set the audio of the image clip
-            video_clip = image_clip.with_audio(audio_clip)
+            # Load background image with OpenCV to get dimensions, then use MoviePy ImageClip
+            bg_img_cv = cv2.imread(str(image_path))
+            if bg_img_cv is None:
+                raise RuntimeError(f"Could not load image file for visualizer: {image_path}")
+            bg_img_cv = cv2.cvtColor(bg_img_cv, cv2.COLOR_BGR2RGB) # Convert BGR to RGB
+            bg_height, bg_width = bg_img_cv.shape[:2]
 
-            # Set fps, otherwise it defaults to a low value that might cause issues
-            # Choose a standard frame rate like 24, 25 or 30
+            # Define visualizer parameters (similar to visualizer.py)
+            num_bars = 20
+            max_bar_height_factor = 0.6 # Factor of bg_height
+            max_bar_height = int(bg_height * max_bar_height_factor)
+            margin = 50
+            space = 10
+            bar_width = (bg_width - 2 * margin - (num_bars - 1) * space) // num_bars
+            if bar_width <= 0: # Ensure bar_width is positive
+                bar_width = 10 # Fallback bar_width if calculated is too small or negative
+
+
+            def make_frame(t):
+                # Map video time to spectrogram time index
+                i = min(int(round(t * sr / hop_length)), melspec.shape[1] - 1)
+                spec_t = melspec[:, i]
+
+                # Compute bar heights
+                bar_heights = (spec_t / max_val) * max_bar_height
+                bar_heights = bar_heights.astype(int)
+
+                # Create a blank image with alpha channel (transparent) for the visualizer layer
+                viz_frame = np.zeros((bg_height, bg_width, 4), dtype=np.uint8)
+
+                for j in range(num_bars):
+                    x_left = margin + j * (bar_width + space)
+                    x_right = x_left + bar_width
+                    # Bars from bottom, growing upwards
+                    y_bottom = bg_height - 10 # Small offset from very bottom
+                    y_top = max(int(y_bottom - bar_heights[j]), 0)
+
+
+                    # Ensure integer coordinates and within bounds
+                    x_left, x_right = int(x_left), int(x_right)
+                    y_top, y_bottom = int(y_top), int(y_bottom)
+                    
+                    if x_right > x_left and y_bottom > y_top : #Ensure valid rectangle
+                         # Draw the bar (white, semi-transparent)
+                        cv2.rectangle(viz_frame, (x_left, y_top), (x_right, y_bottom), (255, 255, 255, 180), -1)
+
+
+                return viz_frame # Return frame with alpha
+
+            # Create background and audio clips
+            background_clip = ImageClip(str(image_path)).with_duration(audio_duration)
+            audio_clip_main = AudioFileClip(str(audio_path))
+
+            # Create the visualizer clip
+            visualizer_clip = VideoClip(make_frame, duration=audio_duration)
+
+
+            # Composite the background and visualizer
+            # The visualizer is placed on top of the background
+            final_clip = CompositeVideoClip([background_clip, visualizer_clip.with_position(("center", "center"))], size=(bg_width, bg_height))
+            final_clip = final_clip.with_audio(audio_clip_main)
+
+
             fps = 24
-
-            # Write the result to a file
-            # Use specified codec, bitrate, and threads for potentially better performance/compatibility
-            # preset='ultrafast' can speed up encoding but might reduce quality
-            video_clip.write_videofile(
+            final_clip.write_videofile(
                 str(output_path),
-                codec='libx264',      # Common video codec
-                audio_codec='aac',    # Common audio codec
+                codec='libx264',
+                audio_codec='aac',
                 fps=fps,
-                # preset='ultrafast',
-                # threads=4,          # Adjust based on server cores
-                # bitrate="5000k"     # Adjust as needed for quality vs size
-                logger=None # Can set to 'bar' for progress bar if running interactively
+                logger=None
             )
 
-            # Close clips to release file handles
-            audio_clip.close()
-            image_clip.close()
-            video_clip.close()
+            # Close clips
+            audio_clip_main.close()
+            background_clip.close()
+            visualizer_clip.close()
+            final_clip.close()
             # --- MoviePy Logic End ---
 
             logger.info(f"Video generation successful: {output_path}")
