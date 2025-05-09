@@ -1,9 +1,10 @@
 {
 	"info": {
-		"_postman_id": "YOUR_COLLECTION_ID", 
+		"_postman_id": "4b8c6b6c-46b1-49c7-8138-92bcb45e7eb8",
 		"name": "XeoCast Video Service API",
 		"description": "Postman collection for the XeoCast Video Service API. Provides functionality to generate and publish videos.",
-		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"_exporter_id": "1226252"
 	},
 	"item": [
 		{
@@ -25,10 +26,7 @@
 						},
 						"description": "Checks the operational status of the API service."
 					},
-					"response": [],
-					"auth": {
-						"type": "noauth"
-					}
+					"response": []
 				}
 			]
 		},
@@ -98,7 +96,8 @@
 									"    console.log(\"task_id not found in response.\");",
 									"}"
 								],
-								"type": "text/javascript"
+								"type": "text/javascript",
+								"packages": {}
 							}
 						}
 					],
@@ -112,7 +111,7 @@
 						],
 						"body": {
 							"mode": "raw",
-							"raw": "{\n    \"source_image_r2_key\": \"path/to/your/image.jpg\",\n    \"source_audio_r2_key\": \"path/to/your/audio.mp3\",\n    \"output_filename\": \"generated_video.mp4\",\n    \"callback_url\": \"{{baseUrl}}/test-callback\",\n    \"resolution\": \"1920x1080\",\n    \"user_id\": \"user123\",\n    \"project_id\": \"project456\"\n}",
+							"raw": "{\n    \"background_image_key\": \"0-test-bg.jpeg\",\n    \"audio_file_key\": \"0-test-30sec.wav\",\n    \"callback_url\": \"{{baseUrl}}/test-callback\"\n}",
 							"options": {
 								"raw": {
 									"language": "json"
@@ -150,7 +149,7 @@
 						],
 						"body": {
 							"mode": "raw",
-							"raw": "{\n    \"youtube_channel_id\": \"UC_ExampleChannelID12345\",\n    \"client_secret_filename\": \"r2_key_for_client_secret.json\"\n}",
+							"raw": "{\n    \"youtube_channel_id\": \"{{youtubeChannelId}}\"\n}",
 							"options": {
 								"raw": {
 									"language": "json"
@@ -168,10 +167,7 @@
 						},
 						"description": "Initiates the YouTube OAuth2 flow. Body requires `GetYoutubeAuthUrlRequest` model."
 					},
-					"response": [],
-					"auth": {
-						"type": "noauth"
-					}
+					"response": []
 				},
 				{
 					"name": "OAuth2 Callback Handler (GET - Reference)",
@@ -201,10 +197,7 @@
 						},
 						"description": "Handles the OAuth2 callback from Google. This is typically opened in a browser. For reference."
 					},
-					"response": [],
-					"auth": {
-						"type": "noauth"
-					}
+					"response": []
 				}
 			],
 			"description": "Endpoints for YouTube OAuth2 flow."
@@ -224,7 +217,7 @@
 						],
 						"body": {
 							"mode": "raw",
-							"raw": "{\n    \"youtube_channel_id\": \"UC_ExampleChannelID12345\",\n    \"title\": \"My Awesome Playlist\",\n    \"description\": \"A collection of awesome videos.\",\n    \"privacy_status\": \"private\"\n}",
+							"raw": "{\n    \"youtube_channel_id\": \"{{youtubeChannelId}}\",\n    \"title\": \"My Awesome Playlist\",\n    \"description\": \"A collection of awesome videos.\",\n    \"privacy_status\": \"private\"\n}",
 							"options": {
 								"raw": {
 									"language": "json"
@@ -244,10 +237,7 @@
 						},
 						"description": "Creates a new playlist. Body based on `PlaylistCreateRequest`."
 					},
-					"response": [],
-					"auth": {
-						"type": "noauth"
-					}
+					"response": []
 				},
 				{
 					"name": "List YouTube Playlists for a Channel",
@@ -255,7 +245,7 @@
 						"method": "GET",
 						"header": [],
 						"url": {
-							"raw": "{{baseUrl}}/youtube/playlists/?youtube_channel_id=UC_ExampleChannelID12345&max_results=10",
+							"raw": "{{baseUrl}}/youtube/playlists/?youtube_channel_id={{youtubeChannelId}}&max_results=10",
 							"host": [
 								"{{baseUrl}}"
 							],
@@ -267,11 +257,11 @@
 							"query": [
 								{
 									"key": "youtube_channel_id",
-									"value": "UC_ExampleChannelID12345"
+									"value": "{{youtubeChannelId}}"
 								},
 								{
 									"key": "page_token",
-									"value": null,
+									"value": "",
 									"disabled": true
 								},
 								{
@@ -282,10 +272,7 @@
 						},
 						"description": "Retrieves a list of playlists for the specified YouTube channel."
 					},
-					"response": [],
-					"auth": {
-						"type": "noauth"
-					}
+					"response": []
 				},
 				{
 					"name": "Get a Specific YouTube Playlist",
@@ -293,7 +280,7 @@
 						"method": "GET",
 						"header": [],
 						"url": {
-							"raw": "{{baseUrl}}/youtube/playlists/YOUR_PLAYLIST_ID?youtube_channel_id=UC_ExampleChannelID12345",
+							"raw": "{{baseUrl}}/youtube/playlists/YOUR_PLAYLIST_ID?youtube_channel_id={{youtubeChannelId}}",
 							"host": [
 								"{{baseUrl}}"
 							],
@@ -305,16 +292,13 @@
 							"query": [
 								{
 									"key": "youtube_channel_id",
-									"value": "UC_ExampleChannelID12345"
+									"value": "{{youtubeChannelId}}"
 								}
 							]
 						},
 						"description": "Retrieves details for a specific playlist by its ID."
 					},
-					"response": [],
-					"auth": {
-						"type": "noauth"
-					}
+					"response": []
 				},
 				{
 					"name": "Update a YouTube Playlist",
@@ -328,7 +312,7 @@
 						],
 						"body": {
 							"mode": "raw",
-							"raw": "{\n    \"youtube_channel_id\": \"UC_ExampleChannelID12345\",\n    \"title\": \"My Updated Awesome Playlist\",\n    \"description\": \"An updated collection of awesome videos.\",\n    \"privacy_status\": \"public\"\n}",
+							"raw": "{\n    \"youtube_channel_id\": \"{{youtubeChannelId}}\",\n    \"title\": \"My Updated Awesome Playlist\",\n    \"description\": \"An updated collection of awesome videos.\",\n    \"privacy_status\": \"public\"\n}",
 							"options": {
 								"raw": {
 									"language": "json"
@@ -348,10 +332,7 @@
 						},
 						"description": "Updates details of an existing playlist. Body based on `PlaylistUpdateRequest`."
 					},
-					"response": [],
-					"auth": {
-						"type": "noauth"
-					}
+					"response": []
 				},
 				{
 					"name": "Delete a YouTube Playlist",
@@ -359,7 +340,7 @@
 						"method": "DELETE",
 						"header": [],
 						"url": {
-							"raw": "{{baseUrl}}/youtube/playlists/YOUR_PLAYLIST_ID?youtube_channel_id=UC_ExampleChannelID12345",
+							"raw": "{{baseUrl}}/youtube/playlists/YOUR_PLAYLIST_ID?youtube_channel_id={{youtubeChannelId}}",
 							"host": [
 								"{{baseUrl}}"
 							],
@@ -371,16 +352,13 @@
 							"query": [
 								{
 									"key": "youtube_channel_id",
-									"value": "UC_ExampleChannelID12345"
+									"value": "{{youtubeChannelId}}"
 								}
 							]
 						},
 						"description": "Deletes a specific playlist by its ID."
 					},
-					"response": [],
-					"auth": {
-						"type": "noauth"
-					}
+					"response": []
 				}
 			],
 			"description": "Endpoints for managing YouTube playlists. These rely on YouTube OAuth credentials associated with `youtube_channel_id`."
@@ -394,7 +372,7 @@
 						"method": "GET",
 						"header": [],
 						"url": {
-							"raw": "{{baseUrl}}/youtube/videos/YOUR_VIDEO_ID?youtube_channel_id=UC_ExampleChannelID12345",
+							"raw": "{{baseUrl}}/youtube/videos/YOUR_VIDEO_ID?youtube_channel_id={{youtubeChannelId}}",
 							"host": [
 								"{{baseUrl}}"
 							],
@@ -406,7 +384,7 @@
 							"query": [
 								{
 									"key": "youtube_channel_id",
-									"value": "UC_ExampleChannelID12345"
+									"value": "{{youtubeChannelId}}"
 								}
 							]
 						},
@@ -433,7 +411,8 @@
 									"    console.log(\"task_id not found in YouTube upload response.\");",
 									"}"
 								],
-								"type": "text/javascript"
+								"type": "text/javascript",
+								"packages": {}
 							}
 						}
 					],
@@ -447,7 +426,7 @@
 						],
 						"body": {
 							"mode": "raw",
-							"raw": "{\n    \"video_r2_key\": \"path/to/your/video.mp4\",\n    \"thumbnail_r2_key\": \"path/to/your/thumbnail.jpg\",\n    \"youtube_channel_id\": \"UC_ExampleChannelID12345\",\n    \"title\": \"My Amazing YouTube Video\",\n    \"description\": \"Check out this incredible video!\",\n    \"tags\": [\"awesome\", \"video\", \"tutorial\"],\n    \"category_id\": \"22\",\n    \"privacy_status\": \"private\",\n    \"embeddable\": true,\n    \"publish_at\": null,\n    \"made_for_kids\": false,\n    \"callback_url\": \"{{baseUrl}}/test-callback\",\n    \"playlist_ids\": [\"YOUR_PLAYLIST_ID_1\", \"YOUR_PLAYLIST_ID_2\"],\n    \"post_first_comment\": \"This is the first comment! Check out my website: example.com\"\n}",
+							"raw": "{\n    \"youtube_channel_id\": \"{{youtubeChannelId}}\",\n    \"video_file_key\": \"video_3ed98d88-39ed-41bb-9ef7-eb9d22ec7752_8c8b94edc98b4a0e9c403d9eeb3c3607.mp4\",\n    \"video_thumbnail_key\": \"bg.jpeg\",\n    \"title\": \"My Amazing YouTube Video 3\",\n    \"description\": \"Check out this incredible video!\",\n    \"tags\": [\"awesome\", \"video\", \"tutorial\"],\n    \"category_id\": \"22\",\n    \"privacy_status\": \"private\",\n    \"publish_at\": \"2025-05-10T20:47:39.878Z\",\n    \"callback_url\": \"{{baseUrl}}/test-callback\",\n    \"playlist_id\": \"PLFCfTVQnrgr0Z-SMNacIbVh_j4CSZl_4D\",\n    \"first_comment\": \"\"\n}",
 							"options": {
 								"raw": {
 									"language": "json"
@@ -505,10 +484,7 @@
 						},
 						"description": "Accepts any JSON POST payload and logs it. Useful for testing callback handling. Body uses `TestCallbackPayload`."
 					},
-					"response": [],
-					"auth": {
-						"type": "noauth"
-					}
+					"response": []
 				}
 			],
 			"description": "Endpoints for testing purposes."
@@ -538,20 +514,17 @@
 		{
 			"key": "baseUrl",
 			"value": "http://localhost:8001",
-			"type": "string",
-			"description": "Base URL for the XeoCast Video Service API. Change if your service runs elsewhere."
+			"type": "string"
 		},
 		{
 			"key": "taskId",
 			"value": "",
-			"type": "string",
-			"description": "Captured Task ID from /generate-video or /youtube/videos/upload responses."
+			"type": "string"
 		},
 		{
 			"key": "X-API-KEY",
 			"value": "YOUR_API_KEY_HERE",
-			"type": "string",
-			"description": "Your API key for accessing protected endpoints."
+			"type": "string"
 		}
 	]
-} 
+}
