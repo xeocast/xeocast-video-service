@@ -13,3 +13,7 @@ APScheduler # For scheduled cleanup tasks
 google-api-python-client
 google-auth-httplib2
 google-auth-oauthlib 
+boto3
+google-auth
+google-api-python-client
+pydantic-settings

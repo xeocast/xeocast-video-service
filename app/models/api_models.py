@@ -26,12 +26,6 @@ class BaseTaskDetails(BaseModel):
 class GenerateVideoDetails(BaseTaskDetails):
     background_image_url: HttpUrl
     audio_file_url: HttpUrl
-    youtube_api_key: Optional[str] = None
-    youtube_video_title: Optional[str] = None
-    youtube_video_description: Optional[str] = None
-    youtube_video_tags: Optional[str] = None # Keep as string, split later if needed
-    youtube_video_thumbnail_url: Optional[HttpUrl] = None
-    youtube_video_playlist_id: Optional[str] = None
 
 class GenerateVideoResponse(BaseModel):
     task_id: str

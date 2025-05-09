@@ -8,7 +8,7 @@ from fastapi import FastAPI, Request, HTTPException, status
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from app.controllers import health, tasks, video, test_callback
+from app.controllers import health, tasks, video, test_callback, youtube_auth
 from app.models.settings import settings
 from app.services.cleanup_service import cleanup_service
 from app.services.signature_service import signature_service
@@ -83,6 +83,7 @@ app.include_router(health.router)
 app.include_router(tasks.router)
 app.include_router(video.router)
 app.include_router(test_callback.router)
+app.include_router(youtube_auth.router)
 
 # --- Root Endpoint (Optional) ---
 @app.get("/", tags=["Root"], include_in_schema=False)

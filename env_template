@@ -1,0 +1,32 @@
+# Environment variables for XeoCast Video Service
+
+# Copy and rename this file as .env
+
+# --- General Application Settings ---
+API_KEY="your_api_key_here"
+# STATIC_DIR="static" # Default is "static", usually no need to change
+# SIGNATURE_SECRET_KEY="your_strong_random_secret_key_for_signing_urls" # Important for security
+# SIGNATURE_EXPIRATION_SECONDS=86400 # Default is 24 hours (in seconds)
+# CLEANUP_INTERVAL_HOURS=1 # Default is 1 hour
+# MAX_VIDEO_AGE_HOURS=48 # Default is 48 hours
+
+# --- Environment Configuration ---
+# APP_ENV="development" # "development" or "production"
+# DEV_BASE_URL="http://localhost:8000" # Base URL for development
+# PROD_BASE_URL="https://your.production.domain.com" # Base URL for production
+# BASE_URL is set automatically based on APP_ENV
+
+# --- Cloudflare R2 Settings ---
+# These are required if you use R2 for storing client secrets or other files.
+R2_ENDPOINT_URL="https://<YOUR_CLOUDFLARE_ACCOUNT_ID>.r2.cloudflarestorage.com"
+R2_ACCESS_KEY_ID="your_r2_access_key_id"
+R2_SECRET_ACCESS_KEY="your_r2_secret_access_key"
+R2_BUCKET_NAME="your_r2_bucket_name" # e.g., "video-service-files"
+
+# --- YouTube OAuth Settings ---
+# YOUTUBE_SCOPES is typically a list like ["https://www.googleapis.com/auth/youtube.upload"]
+# YOUTUBE_OAUTH_CALLBACK_PATH="/oauth2callback" # Default, usually no need to change
+# YOUTUBE_REDIRECT_URI is set automatically based on BASE_URL and YOUTUBE_OAUTH_CALLBACK_PATH
+
+# --- Temporary Directory for Storing Auth Tokens ---
+# TMP_AUTH_DIR="tmp-auth" # Default, usually no need to change 
