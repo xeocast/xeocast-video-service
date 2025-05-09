@@ -97,7 +97,7 @@ if __name__ == "__main__":
     logger.info("Starting Uvicorn server...")
     # Get host and port from environment variables or use defaults
     host = os.getenv("HOST", "0.0.0.0")
-    port = int(os.getenv("PORT", "8000"))
+    port = int(os.getenv("PORT", "8001"))
     log_level = os.getenv("LOG_LEVEL", "info").lower()
 
     uvicorn.run(

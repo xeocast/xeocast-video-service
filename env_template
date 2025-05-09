@@ -12,9 +12,13 @@ API_KEY="your_api_key_here"
 
 # --- Environment Configuration ---
 # APP_ENV="development" # "development" or "production"
-# DEV_BASE_URL="http://localhost:8000" # Base URL for development
-# PROD_BASE_URL="https://your.production.domain.com" # Base URL for production
+# DEV_BASE_URL="http://localhost:8001" # Base URL for development
+# PROD_BASE_URL="https://your.production.domain.com:8000" # Base URL for production
 # BASE_URL is set automatically based on APP_ENV
+
+# --- Port Configuration ---
+DEV_PORT=8001
+PROD_PORT=8000
 
 # --- Cloudflare R2 Settings ---
 # These are required if you use R2 for storing client secrets or other files.
