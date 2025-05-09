@@ -14,7 +14,12 @@ class TaskStatus(str, Enum):
 
 class TaskType(str, Enum):
     GENERATE_VIDEO = "generateVideo"
-    PUBLISH_VIDEO = "publishVideo"
+    UPLOAD_YOUTUBE_VIDEO = "uploadYoutubeVideo"
+
+class PrivacyStatus(str, Enum):
+    PRIVATE = "private"
+    UNLISTED = "unlisted"
+    PUBLIC = "public"
 
 # --- Base Models ---
 
@@ -34,7 +39,7 @@ class GenerateVideoResponse(BaseModel):
 
 # --- Publish Video Specific Models ---
 
-class PublishVideoDetails(BaseTaskDetails):
+class UploadYoutubeVideoDetails(BaseTaskDetails):
     video_url: HttpUrl
     youtube_api_key: str
     youtube_video_title: str
@@ -43,7 +48,7 @@ class PublishVideoDetails(BaseTaskDetails):
     youtube_video_thumbnail_url: HttpUrl
     youtube_video_playlist_id: str
 
-class PublishVideoResponse(BaseModel):
+class UploadYoutubeVideoResponse(BaseModel):
     task_id: str
     status: TaskStatus = TaskStatus.PENDING
     message: str
@@ -91,4 +96,24 @@ class ErrorResponse(BaseModel):
 
 # --- Health Check Models ---
 class HealthResponse(BaseModel):
-    status: str 
+    status: str
+
+# --- YouTube Video Upload Request Model ---
+class YouTubeVideoUploadRequest(BaseModel):
+    callback_url: HttpUrl = Field(..., description="URL to send the callback to after processing.")
+    youtube_channel_id: str = Field(..., description="YouTube channel ID for retrieving the access token.")
+    video_file_key: str = Field(..., description="Key of the video file in the R2 bucket.")
+    video_thumbnail_key: str = Field(..., description="Key of the video thumbnail in the R2 bucket.")
+    title: str = Field(..., max_length=100, description="Title of the YouTube video.")
+    description: str = Field(..., max_length=5000, description="Description of the YouTube video.")
+    categoryId: str = Field(..., description="Category ID of the YouTube video.")
+    tags: List[str] = Field(..., max_items=50, description="List of tags for the YouTube video.")
+    privacy_status: PrivacyStatus = Field(PrivacyStatus.PRIVATE, description="Privacy status of the YouTube video.")
+    publish_at: Optional[datetime] = Field(None, description="Scheduled date and time to publish the video (ISO 8601 format).")
+    playlist_id: Optional[str] = Field(None, description="YouTube playlist ID to add the video to.")
+    first_comment: Optional[str] = Field(None, description="Optional first comment to add and pin to the video.")
+
+class CreateTaskResponse(BaseModel):
+    task_id: str
+    status: TaskStatus = TaskStatus.PENDING
+    message: str 

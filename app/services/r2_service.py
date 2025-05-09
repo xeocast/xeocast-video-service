@@ -118,6 +118,37 @@ class R2Service:
                 detail="An unexpected error occurred while downloading the source file."
             )
 
+    def download_file(self, bucket_name: str, file_key: str, destination_path: Path) -> Path:
+        if not self.s3_ro_client:
+            logger.error("R2 Read-Only client not initialized. Cannot download file.")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="R2 Read-Only service not configured."
+            )
+        try:
+            self.s3_ro_client.download_file(bucket_name, file_key, str(destination_path))
+            logger.info(f"Successfully downloaded {file_key} from {bucket_name} to {destination_path}")
+            return destination_path
+        except ClientError as e:
+            # Check if the error is because the file was not found
+            if e.response['Error']['Code'] == '404' or 'NoSuchKey' in str(e):
+                logger.error(f"File not found in R2 bucket: {bucket_name}/{file_key}")
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=f"File '{file_key}' not found in bucket '{bucket_name}'."
+                )
+            logger.error(f"Error downloading file from R2 bucket {bucket_name}/{file_key}: {e}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Could not download file from R2: {e}"
+            )
+        except Exception as e:
+            logger.error(f"Unexpected error downloading R2 file {file_key} from {bucket_name}: {e}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="An unexpected error occurred while downloading the file."
+            )
+
     def upload_file_to_output_bucket(self, file_path: Path, object_key: str) -> str:
         if not self.s3_rw_client:
             logger.error("R2 Read-Write client not initialized. Cannot upload output file.")

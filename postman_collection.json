@@ -1,0 +1,557 @@
+{
+	"info": {
+		"_postman_id": "YOUR_COLLECTION_ID", 
+		"name": "XeoCast Video Service API",
+		"description": "Postman collection for the XeoCast Video Service API. Provides functionality to generate and publish videos.",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "Health",
+			"item": [
+				{
+					"name": "Health Check",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/health",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"health"
+							]
+						},
+						"description": "Checks the operational status of the API service."
+					},
+					"response": [],
+					"auth": {
+						"type": "noauth"
+					}
+				}
+			]
+		},
+		{
+			"name": "Tasks",
+			"item": [
+				{
+					"name": "Get All Tasks",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/tasks/",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"tasks",
+								""
+							]
+						},
+						"description": "Retrieves metadata for all tasks known to the service. Requires API Key."
+					},
+					"response": []
+				},
+				{
+					"name": "Get Task Status",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/tasks/{{taskId}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"tasks",
+								"{{taskId}}"
+							]
+						},
+						"description": "Retrieves metadata for a specific task using its unique ID (e.g., from {{taskId}} variable). Requires API Key."
+					},
+					"response": []
+				}
+			],
+			"description": "Endpoints for managing and querying task statuses. Protected by API Key."
+		},
+		{
+			"name": "Video Generation",
+			"item": [
+				{
+					"name": "Generate Video",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 202 (Accepted)\", function () {",
+									"    pm.response.to.have.status(202);",
+									"});",
+									"",
+									"var jsonData = pm.response.json();",
+									"if (jsonData && jsonData.task_id) {",
+									"    pm.environment.set(\"taskId\", jsonData.task_id);",
+									"    console.log(\"Captured taskId: \" + jsonData.task_id);",
+									"} else {",
+									"    console.log(\"task_id not found in response.\");",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"source_image_r2_key\": \"path/to/your/image.jpg\",\n    \"source_audio_r2_key\": \"path/to/your/audio.mp3\",\n    \"output_filename\": \"generated_video.mp4\",\n    \"callback_url\": \"{{baseUrl}}/test-callback\",\n    \"resolution\": \"1920x1080\",\n    \"user_id\": \"user123\",\n    \"project_id\": \"project456\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/generate-video",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"generate-video"
+							]
+						},
+						"description": "Initiates an asynchronous task to generate a video. Captures `task_id` to `{{taskId}}`. Requires API Key. Update body with `GenerateVideoDetails` model."
+					},
+					"response": []
+				}
+			],
+			"description": "Endpoints for video generation. Protected by API Key."
+		},
+		{
+			"name": "YouTube Authentication",
+			"item": [
+				{
+					"name": "Get YouTube OAuth Authorization URL",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"youtube_channel_id\": \"UC_ExampleChannelID12345\",\n    \"client_secret_filename\": \"r2_key_for_client_secret.json\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/get-youtube-auth-url",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"get-youtube-auth-url"
+							]
+						},
+						"description": "Initiates the YouTube OAuth2 flow. Body requires `GetYoutubeAuthUrlRequest` model."
+					},
+					"response": [],
+					"auth": {
+						"type": "noauth"
+					}
+				},
+				{
+					"name": "OAuth2 Callback Handler (GET - Reference)",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/oauth2callback?code=YOUR_CODE&state=YOUR_STATE",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"oauth2callback"
+							],
+							"query": [
+								{
+									"key": "code",
+									"value": "YOUR_CODE",
+									"description": "Authorization code from Google."
+								},
+								{
+									"key": "state",
+									"value": "YOUR_STATE",
+									"description": "State parameter from Google."
+								}
+							]
+						},
+						"description": "Handles the OAuth2 callback from Google. This is typically opened in a browser. For reference."
+					},
+					"response": [],
+					"auth": {
+						"type": "noauth"
+					}
+				}
+			],
+			"description": "Endpoints for YouTube OAuth2 flow."
+		},
+		{
+			"name": "YouTube Playlists",
+			"item": [
+				{
+					"name": "Create a YouTube Playlist",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"youtube_channel_id\": \"UC_ExampleChannelID12345\",\n    \"title\": \"My Awesome Playlist\",\n    \"description\": \"A collection of awesome videos.\",\n    \"privacy_status\": \"private\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/youtube/playlists/",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"youtube",
+								"playlists",
+								""
+							]
+						},
+						"description": "Creates a new playlist. Body based on `PlaylistCreateRequest`."
+					},
+					"response": [],
+					"auth": {
+						"type": "noauth"
+					}
+				},
+				{
+					"name": "List YouTube Playlists for a Channel",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/youtube/playlists/?youtube_channel_id=UC_ExampleChannelID12345&max_results=10",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"youtube",
+								"playlists",
+								""
+							],
+							"query": [
+								{
+									"key": "youtube_channel_id",
+									"value": "UC_ExampleChannelID12345"
+								},
+								{
+									"key": "page_token",
+									"value": null,
+									"disabled": true
+								},
+								{
+									"key": "max_results",
+									"value": "10"
+								}
+							]
+						},
+						"description": "Retrieves a list of playlists for the specified YouTube channel."
+					},
+					"response": [],
+					"auth": {
+						"type": "noauth"
+					}
+				},
+				{
+					"name": "Get a Specific YouTube Playlist",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/youtube/playlists/YOUR_PLAYLIST_ID?youtube_channel_id=UC_ExampleChannelID12345",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"youtube",
+								"playlists",
+								"YOUR_PLAYLIST_ID"
+							],
+							"query": [
+								{
+									"key": "youtube_channel_id",
+									"value": "UC_ExampleChannelID12345"
+								}
+							]
+						},
+						"description": "Retrieves details for a specific playlist by its ID."
+					},
+					"response": [],
+					"auth": {
+						"type": "noauth"
+					}
+				},
+				{
+					"name": "Update a YouTube Playlist",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"youtube_channel_id\": \"UC_ExampleChannelID12345\",\n    \"title\": \"My Updated Awesome Playlist\",\n    \"description\": \"An updated collection of awesome videos.\",\n    \"privacy_status\": \"public\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/youtube/playlists/YOUR_PLAYLIST_ID",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"youtube",
+								"playlists",
+								"YOUR_PLAYLIST_ID"
+							]
+						},
+						"description": "Updates details of an existing playlist. Body based on `PlaylistUpdateRequest`."
+					},
+					"response": [],
+					"auth": {
+						"type": "noauth"
+					}
+				},
+				{
+					"name": "Delete a YouTube Playlist",
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/youtube/playlists/YOUR_PLAYLIST_ID?youtube_channel_id=UC_ExampleChannelID12345",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"youtube",
+								"playlists",
+								"YOUR_PLAYLIST_ID"
+							],
+							"query": [
+								{
+									"key": "youtube_channel_id",
+									"value": "UC_ExampleChannelID12345"
+								}
+							]
+						},
+						"description": "Deletes a specific playlist by its ID."
+					},
+					"response": [],
+					"auth": {
+						"type": "noauth"
+					}
+				}
+			],
+			"description": "Endpoints for managing YouTube playlists. These rely on YouTube OAuth credentials associated with `youtube_channel_id`."
+		},
+		{
+			"name": "YouTube Videos",
+			"item": [
+				{
+					"name": "Get YouTube Video Status and Metadata",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/youtube/videos/YOUR_VIDEO_ID?youtube_channel_id=UC_ExampleChannelID12345",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"youtube",
+								"videos",
+								"YOUR_VIDEO_ID"
+							],
+							"query": [
+								{
+									"key": "youtube_channel_id",
+									"value": "UC_ExampleChannelID12345"
+								}
+							]
+						},
+						"description": "Fetches details for a given YouTube video ID. Requires API Key."
+					},
+					"response": []
+				},
+				{
+					"name": "Upload Video to YouTube",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 202 (Accepted)\", function () {",
+									"    pm.response.to.have.status(202);",
+									"});",
+									"",
+									"var jsonData = pm.response.json();",
+									"if (jsonData && jsonData.task_id) {",
+									"    pm.environment.set(\"taskId\", jsonData.task_id);",
+									"    console.log(\"Captured taskId for YouTube upload: \" + jsonData.task_id);",
+									"} else {",
+									"    console.log(\"task_id not found in YouTube upload response.\");",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"video_r2_key\": \"path/to/your/video.mp4\",\n    \"thumbnail_r2_key\": \"path/to/your/thumbnail.jpg\",\n    \"youtube_channel_id\": \"UC_ExampleChannelID12345\",\n    \"title\": \"My Amazing YouTube Video\",\n    \"description\": \"Check out this incredible video!\",\n    \"tags\": [\"awesome\", \"video\", \"tutorial\"],\n    \"category_id\": \"22\",\n    \"privacy_status\": \"private\",\n    \"embeddable\": true,\n    \"publish_at\": null,\n    \"made_for_kids\": false,\n    \"callback_url\": \"{{baseUrl}}/test-callback\",\n    \"playlist_ids\": [\"YOUR_PLAYLIST_ID_1\", \"YOUR_PLAYLIST_ID_2\"],\n    \"post_first_comment\": \"This is the first comment! Check out my website: example.com\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/youtube/videos/upload",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"youtube",
+								"videos",
+								"upload"
+							]
+						},
+						"description": "Uploads a video to YouTube asynchronously. Captures `task_id` to `{{taskId}}`. Requires API Key. Update body based on `YouTubeVideoUploadRequest`."
+					},
+					"response": []
+				}
+			],
+			"description": "Endpoints for managing YouTube videos. Protected by API Key."
+		},
+		{
+			"name": "Testing",
+			"item": [
+				{
+					"name": "Test Callback Endpoint",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"data\": {\n        \"key1\": \"value1\",\n        \"message\": \"Hello from Postman test callback!\",\n        \"taskId\": \"{{taskId}}\"\n    }\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/test-callback",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"test-callback"
+							]
+						},
+						"description": "Accepts any JSON POST payload and logs it. Useful for testing callback handling. Body uses `TestCallbackPayload`."
+					},
+					"response": [],
+					"auth": {
+						"type": "noauth"
+					}
+				}
+			],
+			"description": "Endpoints for testing purposes."
+		}
+	],
+	"auth": {
+		"type": "apikey",
+		"apikey": [
+			{
+				"key": "value",
+				"value": "{{X-API-KEY}}",
+				"type": "string"
+			},
+			{
+				"key": "key",
+				"value": "X-API-Key",
+				"type": "string"
+			},
+			{
+				"key": "in",
+				"value": "header",
+				"type": "string"
+			}
+		]
+	},
+	"variable": [
+		{
+			"key": "baseUrl",
+			"value": "http://localhost:8001",
+			"type": "string",
+			"description": "Base URL for the XeoCast Video Service API. Change if your service runs elsewhere."
+		},
+		{
+			"key": "taskId",
+			"value": "",
+			"type": "string",
+			"description": "Captured Task ID from /generate-video or /youtube/videos/upload responses."
+		},
+		{
+			"key": "X-API-KEY",
+			"value": "YOUR_API_KEY_HERE",
+			"type": "string",
+			"description": "Your API key for accessing protected endpoints."
+		}
+	]
+} 

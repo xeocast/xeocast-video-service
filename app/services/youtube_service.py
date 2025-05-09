@@ -2,6 +2,10 @@ import logging
 from pathlib import Path
 from typing import Optional, List
 import asyncio
+from google.auth.exceptions import RefreshError
+import httpx # Required for credentials.refresh
+
+from fastapi import HTTPException, status # Added HTTPException, status
 
 # Google API Client Libraries
 from googleapiclient.discovery import build
@@ -11,7 +15,10 @@ from googleapiclient.http import MediaFileUpload
 # for uploads. API Key might work for public data but usually not for uploads/modifications.
 # We follow the design's 'youtube_api_key' parameter, but this might need changing to OAuth flow.
 
-from app.models.api_models import PublishVideoDetails
+from app.models.api_models import UploadYoutubeVideoDetails
+from app.models.youtube_models import YouTubeVideoDetailsResponse, YouTubeVideoStatus, YouTubeVideoSnippet # New import
+from app.services.youtube_oauth_service import youtube_oauth_service # New import for loading credentials
+from app.models.settings import settings # For YOUTUBE_SCOPES, if needed, though credentials should have them
 
 logger = logging.getLogger(__name__)
 
@@ -24,10 +31,86 @@ DEFAULT_PRIVACY_STATUS = "private" # Options: 'public', 'private', 'unlisted'
 
 class YouTubeService:
 
+    async def get_video_details(self, video_id: str, youtube_channel_id: str) -> Optional[YouTubeVideoDetailsResponse]:
+        logger.info(f"Fetching YouTube video details for video ID: {video_id} on channel: {youtube_channel_id}")
+
+        credentials = youtube_oauth_service.load_credentials(youtube_channel_id)
+        if not credentials:
+            logger.warning(f"No credentials found for YouTube channel ID: {youtube_channel_id}")
+            # Consider raising a specific exception or returning a clear indicator
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=f"No OAuth credentials found for YouTube channel {youtube_channel_id}. Please authenticate.")
+
+        if credentials.expired and credentials.refresh_token:
+            logger.info(f"Credentials for channel {youtube_channel_id} are expired. Attempting refresh.")
+            try:
+                # Ensure you have httpx installed: pip install httpx
+                # The google-auth library's refresh method requires a transport, httpx.Request() is a common choice.
+                credentials.refresh(httpx.Request())
+                youtube_oauth_service.save_credentials(youtube_channel_id, credentials) # Save refreshed credentials
+                logger.info(f"Successfully refreshed and saved credentials for channel {youtube_channel_id}.")
+            except RefreshError as e:
+                logger.error(f"Failed to refresh YouTube token for channel {youtube_channel_id}: {e}", exc_info=True)
+                # This is a critical error, user might need to re-authenticate
+                raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=f"Failed to refresh YouTube token for channel {youtube_channel_id}. Please re-authenticate.")
+            except Exception as e: # Catch other potential errors during refresh or save
+                logger.error(f"An unexpected error occurred during credential refresh/save for channel {youtube_channel_id}: {e}", exc_info=True)
+                raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Error refreshing credentials.")
+
+
+        try:
+            # Build the YouTube service object using the credentials
+            youtube = build(
+                YOUTUBE_API_SERVICE_NAME,
+                YOUTUBE_API_VERSION,
+                credentials=credentials
+            )
+
+            request = youtube.videos().list(
+                part="snippet,status",
+                id=video_id
+            )
+
+            loop = asyncio.get_running_loop()
+            response = await loop.run_in_executor(None, request.execute)
+
+            if not response.get("items"):
+                logger.warning(f"YouTube video with ID: {video_id} not found.")
+                return None # Or raise a specific VideoNotFoundException
+
+            video_data = response["items"][0]
+            snippet_data = video_data.get("snippet", {})
+            status_data = video_data.get("status", {})
+
+            # Parse into Pydantic models for type safety and clarity
+            # snippet = YouTubeVideoSnippet(**snippet_data)
+            # status_info = YouTubeVideoStatus(**status_data)
+
+            return YouTubeVideoDetailsResponse(
+                video_id=video_id,
+                title=snippet_data.get("title", "N/A"),
+                description=snippet_data.get("description", "N/A"),
+                published_at=snippet_data.get("publishedAt"),
+                privacy_status=status_data.get("privacyStatus", "N/A"),
+                upload_status=status_data.get("uploadStatus"),
+                channel_id=snippet_data.get("channelId", "N/A"),
+                channel_title=snippet_data.get("channelTitle", "N/A"),
+                publish_at=status_data.get("publishAt") # This is from status for scheduled videos
+            )
+
+        except HttpError as e:
+            logger.error(f"An HTTP error {e.resp.status} occurred while fetching video {video_id}: {e.content}", exc_info=True)
+            if e.resp.status == 404:
+                return None # Video not found
+            # Handle other specific HTTP errors as needed
+            raise HTTPException(status_code=e.resp.status, detail=f"YouTube API error: {e.reason}") from e
+        except Exception as e:
+            logger.error(f"Failed to fetch YouTube video details for {video_id}: {e}", exc_info=True)
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Internal error fetching video details: {e}") from e
+
     async def upload_video(
         self,
         video_path: Path,
-        details: PublishVideoDetails
+        details: UploadYoutubeVideoDetails
     ) -> Optional[str]:
         """Uploads the video to YouTube using the provided details and API key."""
 

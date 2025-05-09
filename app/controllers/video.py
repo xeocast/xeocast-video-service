@@ -3,13 +3,13 @@ from pydantic import HttpUrl
 from typing import Optional
 
 from app.models.api_models import (
-    GenerateVideoResponse, PublishVideoResponse,
+    GenerateVideoResponse, UploadYoutubeVideoResponse,
     ErrorResponse, TaskType,
-    GenerateVideoDetails, PublishVideoDetails
+    GenerateVideoDetails, UploadYoutubeVideoDetails
 )
 from app.services.task_service import task_service
 from app.utils.dependencies import get_api_key
-from app.utils.background_tasks import run_generate_video_task, run_publish_video_task
+from app.utils.background_tasks import run_generate_video_task, run_upload_youtube_video_task
 
 router = APIRouter(
     tags=["Video"],
@@ -47,29 +47,9 @@ async def generate_video(
             detail=f"Failed to initiate task: {e}"
         )
 
-@router.post(
-    "/publish-video",
-    response_model=PublishVideoResponse,
-    status_code=status.HTTP_202_ACCEPTED,
-    summary="Publish Video to YouTube",
-    description="Publishes a pre-existing video to YouTube via API."
-)
-async def publish_video(
-    background_tasks: BackgroundTasks,
-    payload: PublishVideoDetails = Body(...)
-):
-    """Endpoint to start video publishing to YouTube."""
-    try:
-        task = task_service.create_task(TaskType.PUBLISH_VIDEO, payload)
-        background_tasks.add_task(run_publish_video_task, task.id)
-        return PublishVideoResponse(
-            task_id=task.id,
-            status=task.status,
-            message="Task created successfully. Results will be sent to the callback URL when ready."
-        )
-    except Exception as e:
-        # Log the exception details here
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to initiate task: {e}"
-        ) 
+# The /upload-yt-video endpoint below is being removed as its functionality
+# is consolidated into app/routers/youtube_videos.py with the path /youtube/videos/upload.
+# @router.post(
+#     "/upload-yt-video",
+# ... (rest of the function definition)
+# Ensure there are no trailing empty lines if this was the last function. 

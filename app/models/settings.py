@@ -47,7 +47,7 @@ class Settings(BaseSettings):
     R2_VIDEO_OUTPUT_BUCKET: str = ""
 
     # YouTube OAuth Settings
-    YOUTUBE_SCOPES: list[str] = ["https://www.googleapis.com/auth/youtube.upload"]
+    YOUTUBE_SCOPES: list[str] = ["https://www.googleapis.com/auth/youtube"]
     YOUTUBE_OAUTH_CALLBACK_PATH: str = "/oauth2callback" # The path for OAuth callback
     YOUTUBE_REDIRECT_URI: str = "" # Will be set by validator based on APP_ENV and BASE_URL
 

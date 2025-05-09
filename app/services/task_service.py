@@ -2,7 +2,7 @@ from typing import Dict, List, Optional
 from datetime import datetime
 import threading
 
-from app.models.api_models import TaskMetadata, TaskStatus, TaskType, GenerateVideoDetails, PublishVideoDetails
+from app.models.api_models import TaskMetadata, TaskStatus, TaskType, GenerateVideoDetails, UploadYoutubeVideoDetails
 
 
 class TaskService:
@@ -13,7 +13,7 @@ class TaskService:
     def create_task(
         self,
         task_type: TaskType,
-        details: GenerateVideoDetails | PublishVideoDetails
+        details: GenerateVideoDetails | UploadYoutubeVideoDetails
     ) -> TaskMetadata:
         """Creates a new task and stores it."""
         with self._lock:

@@ -6,7 +6,7 @@ import os
 import uuid
 from pydantic import HttpUrl
 
-from app.models.api_models import TaskMetadata, TaskStatus, GenerateVideoDetails, PublishVideoDetails, CallbackPayload
+from app.models.api_models import TaskMetadata, TaskStatus, GenerateVideoDetails, UploadYoutubeVideoDetails, CallbackPayload
 from app.services.task_service import task_service
 from app.services.video_service import video_service
 from app.services.file_downloader import file_downloader_service
@@ -139,14 +139,14 @@ async def run_generate_video_task(task_id: str):
         
         logger.info(f"Background task finished: Generate Video {task_id}. Final Status: {final_status}. R2 Key: {r2_video_object_key}")
 
-async def run_publish_video_task(task_id: str):
+async def run_upload_youtube_video_task(task_id: str):
     """Handles the asynchronous video publishing process (primarily YouTube). Video source can be a URL or an R2 key."""
     task = task_service.get_task(task_id)
     if not task or not isinstance(task.details, dict):
         logger.error(f"Publish task {task_id}: Not found or details missing.")
         return
 
-    details: PublishVideoDetails = PublishVideoDetails(**task.details)
+    details: UploadYoutubeVideoDetails = UploadYoutubeVideoDetails(**task.details)
 
     task_service.set_task_processing(task_id)
     logger.info(f"Starting background task: Publish Video {task_id} from source: {details.video_url}")
@@ -213,7 +213,7 @@ async def run_publish_video_task(task_id: str):
         # For now, we assume the primary goal is YouTube upload. If the video came from an external URL,
         # we upload it to YT. We *could* also save it to our R2_VIDEO_OUTPUT_BUCKET.
         # Let's assume we DO want to store it in our R2 for consistency and a signed URL.
-        output_r2_filename = video_service._generate_video_filename(f"publish_{task_id}") # Unique name for our R2
+        output_r2_filename = video_service._generate_video_filename(f"upload_yt_{task_id}") # Unique name for our R2
         logger.info(f"Task {task_id}: Uploading downloaded video to our R2 as {output_r2_filename}")
         r2_output_object_key = await loop.run_in_executor(
             None, 
@@ -263,4 +263,4 @@ async def run_publish_video_task(task_id: str):
             logger.info(f"Task {task_id}: Cleaning up temporary source video file: {local_video_path_for_upload}")
             await loop.run_in_executor(None, file_downloader_service.cleanup_temp_file, local_video_path_for_upload)
 
-        logger.info(f"Background task finished: Publish Video {task_id}. Final Status: {final_status}. R2 Key: {r2_output_object_key}, YT ID: {youtube_video_id}") 
+        logger.info(f"Background task finished: Upload YouTube Video {task_id}. Final Status: {final_status}. R2 Key: {r2_output_object_key}, YT ID: {youtube_video_id}") 

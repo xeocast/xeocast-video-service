@@ -1,10 +1,12 @@
 import logging
-from fastapi import APIRouter, Depends, HTTPException, status, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, status, Query, Request, BackgroundTasks
 from fastapi.responses import JSONResponse, HTMLResponse
 
 from app.models.youtube_models import GetYoutubeAuthUrlRequest, GetYoutubeAuthUrlResponse
 from app.services.youtube_oauth_service import youtube_oauth_service, YouTubeOAuthService
-from app.models.api_models import ErrorResponse
+from app.models.api_models import ErrorResponse, YouTubeVideoUploadRequest, CreateTaskResponse, TaskType
+from app.services.task_service import task_service, TaskService
+from app.services.youtube_video_service import youtube_video_service, YouTubeVideoService
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -109,4 +111,6 @@ async def oauth2callback(
             </body>
         </html>
         """
-        return HTMLResponse(content=html_error_content, status_code=status.HTTP_500_INTERNAL_SERVER_ERROR) 
+        return HTMLResponse(content=html_error_content, status_code=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+# Ensure there are no trailing empty lines if this was the last function. 
