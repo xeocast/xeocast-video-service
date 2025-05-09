@@ -137,6 +137,9 @@ cython_debug/
 static/
 output/
 
+# Temporary auth files
+tmp-auth/
+
 # OS generated files
 .DS_Store
 .DS_Store?
