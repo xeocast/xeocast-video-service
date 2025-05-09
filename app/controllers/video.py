@@ -31,7 +31,7 @@ async def generate_video(
     background_tasks: BackgroundTasks,
     payload: GenerateVideoDetails = Body(...)
 ):
-    """Endpoint to start video generation."""
+    """Endpoint to start video generation using R2 object keys for source image and audio."""
     try:
         task = task_service.create_task(TaskType.GENERATE_VIDEO, payload)
         background_tasks.add_task(run_generate_video_task, task.id)

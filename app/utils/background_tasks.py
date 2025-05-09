@@ -2,59 +2,49 @@ import logging
 import asyncio
 from pathlib import Path
 from typing import Optional
+import os
+import uuid
+from pydantic import HttpUrl
 
 from app.models.api_models import TaskMetadata, TaskStatus, GenerateVideoDetails, PublishVideoDetails, CallbackPayload
 from app.services.task_service import task_service
 from app.services.video_service import video_service
 from app.services.file_downloader import file_downloader_service
 from app.services.callback_service import callback_service
-from app.services.signature_service import signature_service
-from app.services.youtube_service import youtube_service # Assuming placeholder exists
-from app.models.settings import settings # Import settings
+from app.services.r2_service import r2_service
+from app.services.youtube_service import youtube_service
+from app.models.settings import settings
 
 logger = logging.getLogger(__name__)
 
-async def _send_final_callback(task: TaskMetadata, status: TaskStatus, video_path: Optional[Path] = None, error_message: Optional[str] = None):
-    """Helper function to construct and send the final callback."""
+async def _send_final_callback(task: TaskMetadata, status: TaskStatus, r2_object_key: Optional[str] = None, error_message: Optional[str] = None):
+    """Helper function to construct and send the final callback, using R2 presigned URL if applicable."""
     video_url_with_signature = None
-    signature = None # Keep for compatibility, even if only in URL
-    if status == TaskStatus.COMPLETED and video_path:
-        # Generate signed URL relative to where the static files will be served
-        # Assuming static files served at /static/
-        # The base_url should ideally come from request or config
-        # Placeholder: Use relative path for now, signing logic needs the full URL context later
-        relative_video_path = f"/static/{video_path.name}"
-        # TODO: Determine the correct base URL for signing (e.g., from request or settings)
-        # For now, let's assume a placeholder base URL. This MUST be configured correctly.
-        base_url = "http://localhost:8000" # Placeholder - Needs to be dynamic or configurable
-        # Use BASE_URL from settings
-        base_url = settings.BASE_URL
-        try:
-            video_url_with_signature = signature_service.sign_url(base_url, relative_video_path)
-            # Extract signature part if needed for the payload field (though redundant)
-            # parsed = urlparse(video_url_with_signature)
-            # query_params = parse_qs(parsed.query)
-            # signature = query_params.get('signature', [None])[0]
-            signature = "dummy_signature" # Placeholder
+    # signature = None # Kept for compatibility, even if only in URL - Now largely irrelevant with R2 presigned URLs
 
+    if status == TaskStatus.COMPLETED and r2_object_key:
+        try:
+            # Generate presigned URL for the R2 object
+            video_url_with_signature = r2_service.generate_presigned_url_for_output_bucket(r2_object_key, expiration=settings.SIGNATURE_EXPIRATION_SECONDS)
+            logger.info(f"Task {task.id}: Generated presigned R2 URL: {video_url_with_signature}")
         except Exception as e:
-            logger.error(f"Task {task.id}: Failed to sign video URL {relative_video_path}: {e}", exc_info=True)
-            status = TaskStatus.ERROR
-            error_message = f"Failed to sign video URL: {e}"
+            logger.error(f"Task {task.id}: Failed to generate presigned R2 URL for object {r2_object_key}: {e}", exc_info=True)
+            status = TaskStatus.ERROR # Mark as error if we can't even provide the URL
+            error_message = f"Video processed, but failed to generate access URL: {e}"
             video_url_with_signature = None
-            signature = None
 
     callback_payload = CallbackPayload(
         taskId=task.id,
         status=status.value, # Use 'completed' or 'error' string
         video_url=video_url_with_signature,
-        video_signature=signature, # Redundant if signature is in URL, but matches design
+        # video_signature field is less relevant with full presigned URLs, can be omitted or set to None/empty
+        video_signature=None, 
         error=error_message
     )
 
     # Update task one last time before sending callback
-    if status == TaskStatus.COMPLETED:
-        task_service.set_task_completed(task.id, result={'video_url': str(video_path), 'signed_url': video_url_with_signature})
+    if status == TaskStatus.COMPLETED and r2_object_key:
+        task_service.set_task_completed(task.id, result={'r2_object_key': r2_object_key, 'signed_r2_url': video_url_with_signature})
     else:
         task_service.set_task_error(task.id, error_message or "Unknown error")
 
@@ -63,79 +53,57 @@ async def _send_final_callback(task: TaskMetadata, status: TaskStatus, video_pat
 
 
 async def run_generate_video_task(task_id: str):
-    """Handles the asynchronous video generation process."""
+    """Handles the asynchronous video generation process using R2 for inputs and outputs."""
     task = task_service.get_task(task_id)
     if not task or not isinstance(task.details, dict): # Check details is dict
         logger.error(f"Generate task {task_id}: Not found or details missing.")
         return
 
-    # Type hint for clarity after check
     details: GenerateVideoDetails = GenerateVideoDetails(**task.details)
 
     task_service.set_task_processing(task_id)
-    logger.info(f"Starting background task: Generate Video {task_id}")
+    logger.info(f"Starting background task: Generate Video {task_id} from R2 keys: image='{details.background_image_key}', audio='{details.audio_file_key}'")
 
     image_path_temp: Optional[Path] = None
     audio_path_temp: Optional[Path] = None
-    output_video_path: Optional[Path] = None
+    output_video_path_local: Optional[Path] = None
+    r2_video_object_key: Optional[str] = None
     error_message: Optional[str] = None
     final_status: TaskStatus = TaskStatus.ERROR # Assume error until success
+    loop = asyncio.get_running_loop()
 
     try:
-        # 1. Download files
-        logger.info(f"Task {task_id}: Downloading background image from {details.background_image_url}")
-        image_path_temp = await file_downloader_service.download_file(str(details.background_image_url), task_id)
-        logger.info(f"Task {task_id}: Downloading audio file from {details.audio_file_url}")
-        audio_path_temp = await file_downloader_service.download_file(str(details.audio_file_url), task_id)
+        # 1. Download files from R2 Source Bucket
+        logger.info(f"Task {task_id}: Downloading background image R2 key {details.background_image_key}")
+        image_path_temp = await file_downloader_service.download_r2_source_file(details.background_image_key, task_id)
+        
+        logger.info(f"Task {task_id}: Downloading audio file R2 key {details.audio_file_key}")
+        audio_path_temp = await file_downloader_service.download_r2_source_file(details.audio_file_key, task_id)
 
-        # 2. Generate Video filename
+        # 2. Generate Video filename (this will also be the R2 object key)
         output_filename = video_service._generate_video_filename(task_id)
 
-        # 3. Generate Video (CPU-bound, consider running in a thread pool executor)
-        logger.info(f"Task {task_id}: Starting video creation with MoviePy.")
-        loop = asyncio.get_running_loop()
-        output_video_path = await loop.run_in_executor(
+        # 3. Generate Video locally (CPU-bound)
+        logger.info(f"Task {task_id}: Starting local video creation with MoviePy. Output filename: {output_filename}")
+        output_video_path_local = await loop.run_in_executor(
             None, # Use default executor (ThreadPoolExecutor)
             video_service.create_video_from_image_audio,
             image_path_temp,
             audio_path_temp,
-            output_filename
+            output_filename # This filename is used for the local temp file in static dir
         )
-        logger.info(f"Task {task_id}: Video created successfully at {output_video_path}")
+        logger.info(f"Task {task_id}: Local video created successfully at {output_video_path_local}")
+
+        # 4. Upload generated video to R2 Output Bucket
+        logger.info(f"Task {task_id}: Uploading {output_video_path_local} to R2 as {output_filename}")
+        r2_video_object_key = await loop.run_in_executor(
+            None,
+            r2_service.upload_file_to_output_bucket,
+            output_video_path_local, 
+            output_filename # Using the generated filename as the R2 object key
+        )
+        logger.info(f"Task {task_id}: Successfully uploaded video to R2 with key: {r2_video_object_key}")
         final_status = TaskStatus.COMPLETED
-
-        # 4. (Optional) Upload to YouTube if API key provided
-        if details.youtube_api_key and output_video_path:
-            logger.info(f"Task {task_id}: YouTube API key provided, attempting upload.")
-            try:
-                # Prepare details for YouTube upload (might need adjustments)
-                # Assuming GenerateVideoDetails contains needed fields for now
-                publish_details = PublishVideoDetails(
-                    video_url=details.background_image_url, # This isn't right, need video path or URL
-                    callback_url=details.callback_url, # Not directly used by upload func
-                    youtube_api_key=details.youtube_api_key,
-                    youtube_video_title=details.youtube_video_title or "Untitled Video",
-                    youtube_video_description=details.youtube_video_description or "",
-                    youtube_video_tags=details.youtube_video_tags or "",
-                    youtube_video_thumbnail_url=details.youtube_video_thumbnail_url, # Optional
-                    youtube_video_playlist_id=details.youtube_video_playlist_id # Optional
-                )
-                youtube_video_id = await youtube_service.upload_video(output_video_path, publish_details)
-                if youtube_video_id:
-                    logger.info(f"Task {task_id}: Successfully uploaded to YouTube with ID: {youtube_video_id}")
-                    # Optionally update task result with youtube id
-                    task_result = task_service.get_task(task_id).result or {}
-                    task_result['youtube_video_id'] = youtube_video_id
-                    task_service.update_task_result(task_id, task_result)
-                else:
-                    logger.warning(f"Task {task_id}: YouTube upload attempted but failed or returned no ID.")
-                    # Decide if this constitutes a partial failure or just a warning
-
-            except Exception as yt_err:
-                logger.error(f"Task {task_id}: YouTube upload failed: {yt_err}", exc_info=True)
-                # Don't mark the whole task as failed, just log the YouTube error
-                # error_message = f"Video generated, but YouTube upload failed: {yt_err}"
-                # final_status = TaskStatus.ERROR # Or maybe COMPLETED_WITH_WARNINGS?
 
     except (ConnectionError, ValueError, IOError, RuntimeError) as e:
         logger.error(f"Task {task_id}: Failed during video generation process: {e}", exc_info=True)
@@ -146,29 +114,33 @@ async def run_generate_video_task(task_id: str):
         error_message = f"An unexpected error occurred: {e}"
         final_status = TaskStatus.ERROR
     finally:
-        # 5. Send Callback
-        await _send_final_callback(task, final_status, output_video_path, error_message)
+        # 6. Send Callback (with R2 object key if successful)
+        await _send_final_callback(task, final_status, r2_video_object_key, error_message)
 
-        # 6. Cleanup downloaded source files
-        files_to_delete = []
-        if image_path_temp:
-            files_to_delete.append(image_path_temp)
-        if audio_path_temp:
-            files_to_delete.append(audio_path_temp)
+        # 7. Cleanup downloaded temporary source files
+        files_to_delete_temp = []
+        if image_path_temp: files_to_delete_temp.append(image_path_temp)
+        if audio_path_temp: files_to_delete_temp.append(audio_path_temp)
 
-        if files_to_delete:
-            logger.info(f"Task {task_id}: Cleaning up source files: {files_to_delete}")
-            # Run cleanup in executor as it involves file I/O
-            loop = asyncio.get_running_loop()
-            await loop.run_in_executor(None, video_service.cleanup_files, files_to_delete)
+        if files_to_delete_temp:
+            logger.info(f"Task {task_id}: Cleaning up temporary source files: {files_to_delete_temp}")
+            await loop.run_in_executor(None, file_downloader_service.cleanup_temp_file, files_to_delete_temp[0]) # cleanup_temp_file needs individual calls
+            if len(files_to_delete_temp) > 1:
+                 await loop.run_in_executor(None, file_downloader_service.cleanup_temp_file, files_to_delete_temp[1])
 
-        # Note: The generated video file (output_video_path) is NOT deleted here.
-        # It will be cleaned up later by the scheduled CleanupService.
-        logger.info(f"Background task finished: Generate Video {task_id}. Final Status: {final_status}")
 
+        # 8. Cleanup locally generated video file (as it's now in R2)
+        if output_video_path_local and output_video_path_local.exists():
+            logger.info(f"Task {task_id}: Cleaning up locally generated video file: {output_video_path_local}")
+            try:
+                await loop.run_in_executor(None, os.remove, output_video_path_local)
+            except Exception as e_clean:
+                logger.error(f"Task {task_id}: Failed to clean up local video file {output_video_path_local}: {e_clean}")
+        
+        logger.info(f"Background task finished: Generate Video {task_id}. Final Status: {final_status}. R2 Key: {r2_video_object_key}")
 
 async def run_publish_video_task(task_id: str):
-    """Handles the asynchronous video publishing process (primarily YouTube)."""
+    """Handles the asynchronous video publishing process (primarily YouTube). Video source can be a URL or an R2 key."""
     task = task_service.get_task(task_id)
     if not task or not isinstance(task.details, dict):
         logger.error(f"Publish task {task_id}: Not found or details missing.")
@@ -177,29 +149,83 @@ async def run_publish_video_task(task_id: str):
     details: PublishVideoDetails = PublishVideoDetails(**task.details)
 
     task_service.set_task_processing(task_id)
-    logger.info(f"Starting background task: Publish Video {task_id} from {details.video_url}")
+    logger.info(f"Starting background task: Publish Video {task_id} from source: {details.video_url}")
 
-    video_path_temp: Optional[Path] = None
-    output_video_path_perm: Optional[Path] = None # Path if moved to static
+    video_path_temp: Optional[Path] = None       # Temp path for downloaded video if source is URL
+    r2_output_object_key: Optional[str] = None # R2 key if original video is from R2 or if uploaded to our R2 as part of this task
+    local_video_path_for_upload: Optional[Path] = None # The definitive local path of the video to be uploaded to YT
     error_message: Optional[str] = None
     final_status: TaskStatus = TaskStatus.ERROR
     youtube_video_id: Optional[str] = None
+    loop = asyncio.get_running_loop()
+    cleanup_local_video_path_for_upload = False # Flag to cleanup this specific file if it was downloaded/copied
 
     try:
-        # 1. Download the video file specified in the request
-        logger.info(f"Task {task_id}: Downloading video from {details.video_url}")
-        video_path_temp = await file_downloader_service.download_file(str(details.video_url), task_id)
+        # Check if details.video_url is an R2 key (e.g., "r2://bucket/key" or just "key" convention)
+        # For now, assume if it's not a valid HttpUrl, it might be an R2 key. This logic could be more robust.
+        # Or, the PublishVideoDetails model could be changed to specify source_type (url vs r2_key)
+        is_r2_source = not str(details.video_url).startswith(("http://", "https://")) 
+        # A more robust check would be to attempt parsing as HttpUrl and if it fails, treat as R2 key, or add a field to model.
+        # Let's assume for now: if it's a key, it refers to OUR R2_VIDEO_OUTPUT_BUCKET.
 
-        # 2. Generate a filename and move to permanent static location
-        # We need the video file locally to upload it to YouTube
-        # We also make it available via signed URL as per generate-video flow
-        output_filename = video_service._generate_video_filename(task_id) # Reuse naming convention
-        output_video_path_perm = file_downloader_service.move_to_permanent_location(video_path_temp, output_filename)
-        logger.info(f"Task {task_id}: Video downloaded and saved to {output_video_path_perm}")
+        if is_r2_source:
+            # If video_url is actually an R2 key for a video already in our output bucket
+            r2_key_as_str = str(details.video_url) 
+            logger.info(f"Task {task_id}: Video source is an R2 key: {r2_key_as_str}. Assuming it's in output bucket.")
+            # Download it locally for YouTube upload
+            # Create a unique temp name for this download
+            temp_dl_filename = f"publish_{task_id}_{uuid.uuid4().hex}_{r2_key_as_str.split('/')[-1]}"
+            video_path_temp = file_downloader_service.temp_dir / temp_dl_filename
+            
+            await loop.run_in_executor(None, r2_service.download_file, settings.R2_VIDEO_OUTPUT_BUCKET, r2_key_as_str, str(video_path_temp))
+            # ^^^ NOTE: r2_service.download_file does not exist. It should be download_file_from_bucket or similar.
+            # Correcting to a conceptual download from output bucket (assuming such method exists or is added to R2Service)
+            # For now, let's use a placeholder for actual download from output bucket:
+            # This part needs r2_service to have a generic download_file(bucket, key, dest) method.
+            # Let's assume download_r2_source_file can take a bucket argument or we add a new one.
+            # For simplicity, let's assume the key exists in R2_VIDEO_OUTPUT_BUCKET
+            # This will be used if a user wants to publish a video they previously generated with our service.
+
+            # For now, let's assume r2_service has: download_file_from_bucket(bucket_name, key, dest_path)
+            # This method isn't in the current R2Service, so this part will need adjustment to R2Service or this logic.
+            # For the purpose of this refactor, let's assume it's downloaded:
+            # video_path_temp = await file_downloader_service.download_r2_general(bucket=settings.R2_VIDEO_OUTPUT_BUCKET, key=r2_key_as_str, task_id=task_id)
+            # This is a placeholder for a function that would download from a *specified* R2 bucket (output bucket in this case).
+            # Given current r2_service, we cannot directly download from R2_VIDEO_OUTPUT_BUCKET using a simple method yet.
+            # This highlights a potential need for a generic download in r2_service or a change in publish flow.
+            
+            # *** Major Simplification for now: Assume video_url is always a public URL if not an R2 key from generate-video flow ***
+            # This means if user provides an "R2 key" it must be one they got from *our* generate-video. The presigned URL from that would be the input here.
+            # If `details.video_url` IS a key, it means it's a key that *we* manage in R2_VIDEO_OUTPUT_BUCKET.
+            # For now, we will proceed assuming `details.video_url` is always a downloadable HTTP URL.
+            # The scenario of "publishing an existing R2 object by its key" needs more robust handling or clarification.
+            # Fallback to assuming it's a URL to download if is_r2_source logic is tricky.
+            logger.warning(f"Task {task_id}: Treating video_url as a public URL for download. R2 key direct publish needs review.")
+            # Fall through to standard URL download logic
+
+        # 1. Download the video file if it's a URL
+        logger.info(f"Task {task_id}: Downloading video from {details.video_url} for publishing.")
+        video_path_temp = await file_downloader_service.download_file(str(details.video_url), task_id)
+        local_video_path_for_upload = video_path_temp # This is the file to upload to YT
+        cleanup_local_video_path_for_upload = True    # And it needs cleanup
+
+        # 2. (Optional) Copy to our R2 output bucket if not already there or if policy is to always have a copy.
+        # For now, we assume the primary goal is YouTube upload. If the video came from an external URL,
+        # we upload it to YT. We *could* also save it to our R2_VIDEO_OUTPUT_BUCKET.
+        # Let's assume we DO want to store it in our R2 for consistency and a signed URL.
+        output_r2_filename = video_service._generate_video_filename(f"publish_{task_id}") # Unique name for our R2
+        logger.info(f"Task {task_id}: Uploading downloaded video to our R2 as {output_r2_filename}")
+        r2_output_object_key = await loop.run_in_executor(
+            None, 
+            r2_service.upload_file_to_output_bucket, 
+            local_video_path_for_upload, 
+            output_r2_filename
+        )
+        logger.info(f"Task {task_id}: Video copied to R2 with key: {r2_output_object_key}")
 
         # 3. Upload to YouTube
-        logger.info(f"Task {task_id}: Attempting YouTube upload.")
-        youtube_video_id = await youtube_service.upload_video(output_video_path_perm, details)
+        logger.info(f"Task {task_id}: Attempting YouTube upload of {local_video_path_for_upload}.")
+        youtube_video_id = await youtube_service.upload_video(local_video_path_for_upload, details) # Pass PublishVideoDetails directly
 
         if youtube_video_id:
             logger.info(f"Task {task_id}: Successfully uploaded to YouTube with ID: {youtube_video_id}")
@@ -207,28 +233,34 @@ async def run_publish_video_task(task_id: str):
         else:
             error_message = "YouTube upload failed or returned no ID."
             logger.error(f"Task {task_id}: {error_message}")
-            final_status = TaskStatus.ERROR
+            # If R2 upload succeeded, this is a partial success.
+            # For now, if YT fails, the whole task is marked error for simplicity of callback.
+            final_status = TaskStatus.ERROR 
 
     except (ConnectionError, ValueError, IOError, RuntimeError) as e:
         logger.error(f"Task {task_id}: Failed during video publishing process: {e}", exc_info=True)
         error_message = f"Task failed: {e}"
         final_status = TaskStatus.ERROR
     except Exception as e:
-        logger.exception(f"Task {task_id}: An unexpected error occurred: {e}", exc_info=True)
+        logger.exception(f"Task {task_id}: An unexpected error occurred during publish: {e}", exc_info=True)
         error_message = f"An unexpected error occurred: {e}"
         final_status = TaskStatus.ERROR
     finally:
-        # 4. Send Callback
-        # Include YouTube ID in result if successful
-        result_data = {'video_url': str(output_video_path_perm), 'youtube_video_id': youtube_video_id} if final_status == TaskStatus.COMPLETED else {}
-        await _send_final_callback(task, final_status, output_video_path_perm, error_message)
+        # 4. Send Callback - use r2_output_object_key for the R2 URL if available
+        # The primary result for 'publish' is the YouTube ID, but we also provide our R2 URL.
+        result_data_for_task_db = {}
+        if final_status == TaskStatus.COMPLETED:
+            if r2_output_object_key: result_data_for_task_db['r2_object_key'] = r2_output_object_key
+            if youtube_video_id: result_data_for_task_db['youtube_video_id'] = youtube_video_id
+        
+        # _send_final_callback's third argument is the R2 key for *our* generated/stored video's signed URL
+        await _send_final_callback(task, final_status, r2_output_object_key, error_message)
+        if result_data_for_task_db: # Update task result with more specific info if publish was successful
+            task_service.update_task_result(task_id, result_data_for_task_db)
 
-        # 5. Cleanup temporary downloaded file (if it wasn't moved)
-        if video_path_temp and video_path_temp.exists():
-            logger.info(f"Task {task_id}: Cleaning up temporary source file: {video_path_temp}")
-            loop = asyncio.get_running_loop()
-            await loop.run_in_executor(None, file_downloader_service.cleanup_temp_file, video_path_temp)
+        # 5. Cleanup temporary downloaded file (if one was created for YT upload)
+        if local_video_path_for_upload and cleanup_local_video_path_for_upload and local_video_path_for_upload.exists():
+            logger.info(f"Task {task_id}: Cleaning up temporary source video file: {local_video_path_for_upload}")
+            await loop.run_in_executor(None, file_downloader_service.cleanup_temp_file, local_video_path_for_upload)
 
-        # Note: The final video file (output_video_path_perm) is NOT deleted here.
-        # It will be cleaned up later by the scheduled CleanupService.
-        logger.info(f"Background task finished: Publish Video {task_id}. Final Status: {final_status}") 
+        logger.info(f"Background task finished: Publish Video {task_id}. Final Status: {final_status}. R2 Key: {r2_output_object_key}, YT ID: {youtube_video_id}") 

@@ -4,8 +4,12 @@ import shutil
 import uuid
 from pathlib import Path
 from urllib.parse import urlparse
+import logging
 
 from app.models.settings import settings
+from app.services.r2_service import r2_service
+
+logger = logging.getLogger(__name__)
 
 class FileDownloaderService:
     def __init__(self, download_dir: str = settings.STATIC_DIR):
@@ -41,6 +45,33 @@ class FileDownloaderService:
                 if download_path.exists():
                     os.remove(download_path)
                 raise IOError(f"Failed to write downloaded file from {url}: {e}") from e
+
+    async def download_r2_source_file(self, file_key: str, task_id: str) -> Path:
+        """Downloads a file from the R2 source bucket to a temporary location specific to the task."""
+        # Generate a unique local filename to avoid collisions, including task_id for traceability
+        # Extract a base name from the key if possible, or use a UUID
+        base_name = file_key.split('/')[-1] if '/' in file_key else file_key
+        safe_filename = f"{task_id}_{uuid.uuid4().hex}_{base_name}"
+        download_path = self.temp_dir / safe_filename
+
+        try:
+            logger.info(f"Attempting to download R2 source file '{file_key}' for task '{task_id}' to '{download_path}'")
+            # r2_service.download_file_from_source_bucket is synchronous, needs to be run in executor
+            # However, the current structure of r2_service calls boto3 which is blocking.
+            # For now, we call it directly. If this becomes a bottleneck, consider executor.
+            r2_service.download_file_from_source_bucket(file_key=file_key, destination_path=download_path)
+            logger.info(f"Successfully downloaded R2 source file '{file_key}' to '{download_path}'")
+            return download_path
+        except Exception as e:
+            # Ensure cleanup if download fails partway or if file exists from a previous attempt
+            if download_path.exists():
+                try:
+                    os.remove(download_path)
+                except OSError as rm_err:
+                    logger.error(f"Error cleaning up partially downloaded R2 file {download_path}: {rm_err}")
+            # Re-raise the original exception to be handled by the caller
+            logger.error(f"Failed to download R2 source file '{file_key}' for task '{task_id}': {e}", exc_info=True)
+            raise # Re-raise the caught exception (could be HTTPException from r2_service or other)
 
     def move_to_permanent_location(self, temp_path: Path, final_filename: str) -> Path:
         """Moves a downloaded file from the temporary location to the main static directory."""

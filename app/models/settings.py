@@ -21,10 +21,30 @@ class Settings(BaseSettings):
     BASE_URL: str = "" # Will be set by validator below
 
     # Cloudflare R2 Settings
-    R2_ENDPOINT_URL: str = "https://<ACCOUNT_ID>.r2.cloudflarestorage.com" # Replace <ACCOUNT_ID>
-    R2_ACCESS_KEY_ID: str
-    R2_SECRET_ACCESS_KEY: str
-    R2_BUCKET_NAME: str = "video-service-files"
+    R2_ENDPOINT_URL: str # Example: "https://<ACCOUNT_ID>.r2.cloudflarestorage.com"
+    
+    # Read-Only Credentials (for client secrets, source files)
+    R2_RO_ACCESS_KEY_ID: str
+    R2_RO_SECRET_ACCESS_KEY: str
+
+    # Read-Write Credentials (for output video files)
+    R2_RW_ACCESS_KEY_ID: str
+    R2_RW_SECRET_ACCESS_KEY: str
+
+    # Bucket Names (Production)
+    R2_CLIENT_SECRETS_BUCKET_PROD: str = "video-service-files"
+    R2_VIDEO_SOURCE_BUCKET_PROD: str = "video-source-files"
+    R2_VIDEO_OUTPUT_BUCKET_PROD: str = "video-output-files"
+
+    # Bucket Names (Development)
+    R2_CLIENT_SECRETS_BUCKET_DEV: str = "video-service-files" # Assuming same for secrets
+    R2_VIDEO_SOURCE_BUCKET_DEV: str = "video-source-files-preview"
+    R2_VIDEO_OUTPUT_BUCKET_DEV: str = "video-output-files-preview"
+
+    # Resolved Bucket Names (set by validator)
+    R2_CLIENT_SECRETS_BUCKET: str = ""
+    R2_VIDEO_SOURCE_BUCKET: str = ""
+    R2_VIDEO_OUTPUT_BUCKET: str = ""
 
     # YouTube OAuth Settings
     YOUTUBE_SCOPES: list[str] = ["https://www.googleapis.com/auth/youtube.upload"]
@@ -53,8 +73,14 @@ class Settings(BaseSettings):
         current_base_url = ""
         if app_env == "production":
             current_base_url = prod_base_url
+            values.R2_CLIENT_SECRETS_BUCKET = values.R2_CLIENT_SECRETS_BUCKET_PROD
+            values.R2_VIDEO_SOURCE_BUCKET = values.R2_VIDEO_SOURCE_BUCKET_PROD
+            values.R2_VIDEO_OUTPUT_BUCKET = values.R2_VIDEO_OUTPUT_BUCKET_PROD
         else: # Default to development
             current_base_url = dev_base_url
+            values.R2_CLIENT_SECRETS_BUCKET = values.R2_CLIENT_SECRETS_BUCKET_DEV
+            values.R2_VIDEO_SOURCE_BUCKET = values.R2_VIDEO_SOURCE_BUCKET_DEV
+            values.R2_VIDEO_OUTPUT_BUCKET = values.R2_VIDEO_OUTPUT_BUCKET_DEV
         
         values.BASE_URL = current_base_url
         values.YOUTUBE_REDIRECT_URI = f"{current_base_url}{oauth_callback_path}"

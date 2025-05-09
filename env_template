@@ -22,10 +22,26 @@ PROD_PORT=8000
 
 # --- Cloudflare R2 Settings ---
 # These are required if you use R2 for storing client secrets or other files.
-R2_ENDPOINT_URL="https://<YOUR_CLOUDFLARE_ACCOUNT_ID>.r2.cloudflarestorage.com"
-R2_ACCESS_KEY_ID="your_r2_access_key_id"
-R2_SECRET_ACCESS_KEY="your_r2_secret_access_key"
-R2_BUCKET_NAME="your_r2_bucket_name" # e.g., "video-service-files"
+# R2_ENDPOINT_URL="https://<YOUR_CLOUDFLARE_ACCOUNT_ID>.r2.cloudflarestorage.com"
+
+# Read-Only Credentials
+# R2_RO_ACCESS_KEY_ID="your_r2_read_only_access_key_id"
+# R2_RO_SECRET_ACCESS_KEY="your_r2_read_only_secret_access_key"
+
+# Read-Write Credentials
+# R2_RW_ACCESS_KEY_ID="your_r2_read_write_access_key_id"
+# R2_RW_SECRET_ACCESS_KEY="your_r2_read_write_secret_access_key"
+
+# Bucket Names (defaults are usually fine, set in settings.py based on APP_ENV)
+# R2_CLIENT_SECRETS_BUCKET_PROD="video-service-files"
+# R2_VIDEO_SOURCE_BUCKET_PROD="video-source-files"
+# R2_VIDEO_OUTPUT_BUCKET_PROD="video-output-files"
+# R2_CLIENT_SECRETS_BUCKET_DEV="video-service-files" 
+# R2_VIDEO_SOURCE_BUCKET_DEV="video-source-files-preview"
+# R2_VIDEO_OUTPUT_BUCKET_DEV="video-output-files-preview"
+
+# --- Cloudflare Tunnel ---
+CLOUDFLARE_TUNNEL_TOKEN="your_cloudflare_tunnel_token"
 
 # --- YouTube OAuth Settings ---
 # YOUTUBE_SCOPES is typically a list like ["https://www.googleapis.com/auth/youtube.upload"]

@@ -24,8 +24,8 @@ class BaseTaskDetails(BaseModel):
 # --- Generate Video Specific Models ---
 
 class GenerateVideoDetails(BaseTaskDetails):
-    background_image_url: HttpUrl
-    audio_file_url: HttpUrl
+    background_image_key: str
+    audio_file_key: str
 
 class GenerateVideoResponse(BaseModel):
     task_id: str

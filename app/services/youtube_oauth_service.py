@@ -19,10 +19,10 @@ class YouTubeOAuthService:
     def _get_client_config(self, client_secret_filename: str) -> dict:
         try:
             client_config = r2_service.fetch_json_file(
-                bucket_name=settings.R2_BUCKET_NAME,
+                bucket_name=settings.R2_CLIENT_SECRETS_BUCKET,
                 file_key=client_secret_filename
             )
-            # The flow typically expects a structure like {"web": {...}} or {"installed": {...}}
+            # The flow typically expects a structure like {"web": {...}} or {"installed": {...}} or {"device": {...}}
             if not (client_config.get("web") or client_config.get("installed") or client_config.get("device") ):
                 logger.error(f"Client secret file '{client_secret_filename}' has invalid format.")
                 raise HTTPException(
