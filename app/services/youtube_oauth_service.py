@@ -39,7 +39,8 @@ class YouTubeOAuthService:
                 detail="Could not process client secret file."
             )
 
-    def generate_auth_url(self, youtube_channel_id: str, client_secret_filename: str) -> str:
+    def generate_auth_url(self, youtube_channel_id: str) -> str:
+        client_secret_filename = f"{youtube_channel_id}.json"
         client_config = self._get_client_config(client_secret_filename)
         try:
             flow = Flow.from_client_config(

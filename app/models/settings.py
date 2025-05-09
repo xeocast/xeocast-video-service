@@ -47,12 +47,21 @@ class Settings(BaseSettings):
     R2_VIDEO_OUTPUT_BUCKET: str = ""
 
     # YouTube OAuth Settings
-    YOUTUBE_SCOPES: list[str] = ["https://www.googleapis.com/auth/youtube"]
+    YOUTUBE_SCOPES: list[str] = [
+        "https://www.googleapis.com/auth/youtube",
+        "https://www.googleapis.com/auth/youtube.force-ssl" # Added for broader permissions
+    ]
     YOUTUBE_OAUTH_CALLBACK_PATH: str = "/oauth2callback" # The path for OAuth callback
     YOUTUBE_REDIRECT_URI: str = "" # Will be set by validator based on APP_ENV and BASE_URL
 
     # Temporary Directory for Storing Auth Tokens
     TMP_AUTH_DIR: Path = Path("tmp-auth")
+
+    # Temporary directory for downloads and other operations
+    TMP_DIR: Path = Path("tmp")
+
+    # Callback settings
+    CALLBACK_TIMEOUT_SECONDS: int = 30 # Default timeout for callback requests
 
     @model_validator(mode='after')
     def set_dynamic_urls(cls, values):
@@ -103,4 +112,8 @@ if not static_dir_path.exists():
 
 # Ensure tmp-auth directory exists
 if not settings.TMP_AUTH_DIR.exists():
-    settings.TMP_AUTH_DIR.mkdir(parents=True, exist_ok=True) 
+    settings.TMP_AUTH_DIR.mkdir(parents=True, exist_ok=True)
+
+# Ensure tmp directory exists
+if not settings.TMP_DIR.exists():
+    settings.TMP_DIR.mkdir(parents=True, exist_ok=True) 

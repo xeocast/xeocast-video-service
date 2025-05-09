@@ -133,7 +133,7 @@ class YouTubeService:
                     "title": details.youtube_video_title,
                     "description": details.youtube_video_description,
                     "tags": video_tags,
-                    "categoryId": DEFAULT_VIDEO_CATEGORY # Consider making this configurable
+                    "category_id": DEFAULT_VIDEO_CATEGORY # Consider making this configurable
                 },
                 "status": {
                     "privacyStatus": DEFAULT_PRIVACY_STATUS # Consider making this configurable

@@ -106,7 +106,7 @@ class YouTubeVideoUploadRequest(BaseModel):
     video_thumbnail_key: str = Field(..., description="Key of the video thumbnail in the R2 bucket.")
     title: str = Field(..., max_length=100, description="Title of the YouTube video.")
     description: str = Field(..., max_length=5000, description="Description of the YouTube video.")
-    categoryId: str = Field(..., description="Category ID of the YouTube video.")
+    category_id: str = Field(..., description="Category ID of the YouTube video.")
     tags: List[str] = Field(..., max_items=50, description="List of tags for the YouTube video.")
     privacy_status: PrivacyStatus = Field(PrivacyStatus.PRIVATE, description="Privacy status of the YouTube video.")
     publish_at: Optional[datetime] = Field(None, description="Scheduled date and time to publish the video (ISO 8601 format).")

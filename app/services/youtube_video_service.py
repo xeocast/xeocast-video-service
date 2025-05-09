@@ -6,26 +6,30 @@ from googleapiclient.discovery import build # Needs google-api-python-client
 from googleapiclient.http import MediaFileUpload # Needs google-api-python-client
 from google.oauth2.credentials import Credentials
 from google.auth.exceptions import RefreshError
+from google.auth.transport.requests import Request as GoogleAuthRequest # Added import
 
 from app.models.api_models import YouTubeVideoUploadRequest, TaskStatus, CallbackPayload
 from app.services.task_service import task_service
 from app.services.youtube_oauth_service import youtube_oauth_service
 from app.services.r2_service import r2_service # Make sure r2_service is imported
+from app.services.callback_service import callback_service # Added import
 from app.models.settings import settings
 
 logger = logging.getLogger(__name__)
 
 class YouTubeVideoService:
     async def _send_callback(self, url: str, payload: CallbackPayload):
-        try:
-            async with httpx.AsyncClient(timeout=settings.CALLBACK_TIMEOUT_SECONDS) as client:
-                response = await client.post(url, json=payload.model_dump())
-                response.raise_for_status() # Raise an exception for bad status codes
-                logger.info(f"Sent callback for task {payload.taskId} to {url}. Status: {response.status_code}")
-        except httpx.RequestError as e:
-            logger.error(f"Error sending callback for task {payload.taskId} to {url}: {e}")
-        except Exception as e:
-            logger.error(f"Unexpected error sending callback for task {payload.taskId} to {url}: {e}")
+        # try:
+        #     async with httpx.AsyncClient(timeout=settings.CALLBACK_TIMEOUT_SECONDS) as client:
+        #         response = await client.post(url, json=payload.model_dump())
+        #         response.raise_for_status() # Raise an exception for bad status codes
+        #         logger.info(f"Sent callback for task {payload.taskId} to {url}. Status: {response.status_code}")
+        # except httpx.RequestError as e:
+        #     logger.error(f"Error sending callback for task {payload.taskId} to {url}: {e}")
+        # except Exception as e:
+        #     logger.error(f"Unexpected error sending callback for task {payload.taskId} to {url}: {e}")
+        # Use the centralized callback_service
+        await callback_service.send_callback(url, payload)
 
     async def process_upload_task(self, task_id: str):
         logger.info(f"Starting YouTube upload process for task: {task_id}")
@@ -58,7 +62,7 @@ class YouTubeVideoService:
                 raise ValueError(f"Could not retrieve or load YouTube credentials for channel {upload_details.youtube_channel_id}. Please re-authenticate.")
             if credentials.expired and credentials.refresh_token:
                 try:
-                    credentials.refresh(httpx.Request()) # Use httpx.Request for sync refresh context if needed by google-auth
+                    credentials.refresh(GoogleAuthRequest()) # Use GoogleAuthRequest
                     logger.info(f"Refreshed YouTube credentials for channel {upload_details.youtube_channel_id}")
                     youtube_oauth_service.save_credentials(upload_details.youtube_channel_id, credentials) # Save refreshed credentials
                 except RefreshError as re:
@@ -97,7 +101,7 @@ class YouTubeVideoService:
                     "title": upload_details.title,
                     "description": upload_details.description,
                     "tags": upload_details.tags,
-                    "categoryId": upload_details.categoryId,
+                    "category_id": upload_details.category_id,
                     # "defaultLanguage": "en", # Consider making configurable or detecting
                     # "defaultAudioLanguage": "en" # Consider making configurable or detecting
                 },
@@ -163,37 +167,36 @@ class YouTubeVideoService:
                 comment_id_to_pin = comment_thread_response.get("snippet", {}).get("topLevelComment", {}).get("id")
                 if comment_id_to_pin:
                     logger.info(f"Comment {comment_id_to_pin} added to video {video_id}.")
-                    # Pinning the comment: set moderationStatus to 'published' (for visibility) 
-                    # and then call comments().update() with the 'pin' action.
-                    # Note: Pinning requires the channel owner's credentials and that the video is public or unlisted.
-                    # First, ensure comment is published (usually by default)
-                    # youtube_api.comments().setModerationStatus(
-                    #     id=comment_id_to_pin,
-                    #     moderationStatus='published' 
-                    # ).execute()
-                    # Then pin:
-                    # youtube_api.comments().update(
-                    #     part='snippet',
-                    #     body={
-                    #         "id": comment_id_to_pin,
-                    #         "snippet": {
-                    #             "videoId": video_id, # Required by some API versions for comment update context
-                    #             "parentId": comment_id_to_pin, # Incorrect usage, pinning is a property of comment not parent
-                    #             "canPin": True # This is a read-only property usually
-                    #         },
-                    #         "pinningDetails": { # This might be part of a different method or not directly available.
-                    #             "pinned": True
-                    #         }
-                    #     }
-                    # ).execute()
-                    # Simpler approach for pinning: The YouTube API for pinning comments is tricky.
-                    # The `comments.update` method doesn't directly support a `pinned` flag.
-                    # Pinning typically involves setting the moderation status or a specific action if available.
-                    # For now, we just add the comment. Pinning might need manual intervention or a more specific API call if one exists for this purpose.
-                    # It often requires setting the comment's `moderationStatus` to `published` and then, if the API supports, a `pin` action.
-                    # The `comments.pin` method was part of a previous API version. Modern way is more complex or UI-driven.
-                    # Let's assume for now, adding it is sufficient and pinning is a separate concern if API doesn't directly support.
-                    logger.info(f"Comment {comment_id_to_pin} added. Pinning may require YouTube Studio or specific permissions.")
+                    # Ensure the comment is published before attempting to pin
+                    # Pinning a comment programmatically is not directly supported by the YouTube Data API v3 in a simple way.
+                    # It usually requires the channel owner's credentials and specific permissions.
+                    # The common practice is to ensure the comment is published and then pin it via YouTube Studio if the API doesn't allow it.
+                    try:
+                        youtube_api.comments().setModerationStatus(
+                            id=comment_id_to_pin,
+                            moderationStatus='published' # Ensure comment is visible
+                        ).execute()
+                        logger.info(f"Set moderation status to 'published' for comment {comment_id_to_pin}.")
+
+                        # The YouTube Data API v3 does not offer a direct method to "pin" a comment via a simple flag.
+                        # Pinning is typically done through the YouTube Studio interface.
+                        # The following commented-out code represents attempts that are not supported or are unreliable.
+                        # youtube_api.comments().update(
+                        #     part='snippet', # or 'id' or 'pinningDetails' - unclear from official docs
+                        #     body={
+                        #         "id": comment_id_to_pin,
+                        #         "snippet": { # Snippet might be required if 'snippet' is in part
+                        #             # "videoId": video_id, # videoId might be required contextually
+                        #         },
+                        #         # Attempting to use a hypothetical 'pinningDetails' or similar
+                        #         # "pinningDetails": { "isPinned": True } # This structure is speculative
+                        #         # "isPinned": True # Another speculative attempt
+                        #     }
+                        # ).execute()
+                        # logger.info(f"Attempted to pin comment {comment_id_to_pin} on video {video_id}.")
+                        logger.info(f"Comment {comment_id_to_pin} added and status set to published. Pinning typically requires YouTube Studio or specific advanced API usage if available and may not be feasible with standard permissions.")
+                    except Exception as e_pin:
+                        logger.error(f"Could not set moderation status or attempt pinning for comment {comment_id_to_pin} on video {video_id}: {e_pin}")
                 else:
                     logger.warning(f"Could not get comment ID to pin for video {video_id}.")
 

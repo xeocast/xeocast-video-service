@@ -30,12 +30,11 @@ async def get_youtube_auth_url(
     Initiates the YouTube OAuth2 flow by generating an authorization URL.
 
     - **youtube_channel_id**: The ID of the YouTube channel to authorize.
-    - **client_secret_filename**: The filename (key in R2 bucket) of the OAuth client secret JSON.
+                         The client secret JSON file is expected to be named {{youtube_channel_id}}.json in the R2 bucket.
     """
     try:
         auth_url = service.generate_auth_url(
-            youtube_channel_id=request_data.youtube_channel_id,
-            client_secret_filename=request_data.client_secret_filename
+            youtube_channel_id=request_data.youtube_channel_id
         )
         return GetYoutubeAuthUrlResponse(authorization_url=auth_url)
     except HTTPException as e:
