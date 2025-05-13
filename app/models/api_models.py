@@ -74,8 +74,7 @@ class GetAllTasksResponse(RootModel[List[TaskMetadata]]):
 class CallbackPayload(BaseModel):
     taskId: str
     status: Literal["completed", "error"]
-    video_url: Optional[str] = None # URL with signature
-    video_signature: Optional[str] = None # Kept for compatibility with design, though signature is in URL
+    video_bucket_key: Optional[str] = None # Key for the video in R2 bucket
     error: Optional[str] = None
 
 # --- Test Callback Models ---

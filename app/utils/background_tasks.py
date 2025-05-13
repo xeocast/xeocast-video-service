@@ -19,32 +19,15 @@ logger = logging.getLogger(__name__)
 
 async def _send_final_callback(task: TaskMetadata, status: TaskStatus, r2_object_key: Optional[str] = None, error_message: Optional[str] = None):
     """Helper function to construct and send the final callback, using R2 presigned URL if applicable."""
-    # video_url_with_signature = None # Removed as per requirement
-    # signature = None # Kept for compatibility, even if only in URL - Now largely irrelevant with R2 presigned URLs
+    # The final_video_url_for_callback variable is no longer needed as we directly use r2_object_key.
+    # final_video_url_for_callback: Optional[str] = None
 
-    # The video_url will now be None if it was previously the signed R2 URL.
-    # If a different, non-R2, non-signed URL should be provided, that logic would go here.
-    # For now, it defaults to None as we are removing the signed R2 URL.
-    final_video_url_for_callback: Optional[str] = None
-
-    # The original logic for generating presigned URL is removed:
-    # if status == TaskStatus.COMPLETED and r2_object_key:
-    #     try:
-    #         # Generate presigned URL for the R2 object
-    #         video_url_with_signature = r2_service.generate_presigned_url_for_output_bucket(r2_object_key, expiration=settings.SIGNATURE_EXPIRATION_SECONDS)
-    #         logger.info(f"Task {task.id}: Generated presigned R2 URL: {video_url_with_signature}")
-    #     except Exception as e:
-    #         logger.error(f"Task {task.id}: Failed to generate presigned R2 URL for object {r2_object_key}: {e}", exc_info=True)
-    #         status = TaskStatus.ERROR # Mark as error if we can't even provide the URL
-    #         error_message = f"Video processed, but failed to generate access URL: {e}"
-    #         video_url_with_signature = None
+    # The original logic for generating presigned URL is removed.
 
     callback_payload = CallbackPayload(
         taskId=task.id,
         status=status.value, # Use 'completed' or 'error' string
-        video_url=final_video_url_for_callback, # Use the new variable, which is None for R2 objects now
-        # video_signature field is less relevant with full presigned URLs, can be omitted or set to None/empty
-        video_signature=None, 
+        video_bucket_key=r2_object_key, # Pass the R2 object key directly
         error=error_message
     )
 
