@@ -5,7 +5,7 @@ from typing import Optional
 from app.models.api_models import (
     GenerateVideoResponse, UploadYoutubeVideoResponse,
     ErrorResponse, TaskType,
-    GenerateVideoDetails, UploadYoutubeVideoDetails
+    GenerateVideoDetails, UploadYoutubeVideoDetails, BaseTaskDetails
 )
 from app.services.task_service import task_service
 from app.utils.dependencies import get_api_key
@@ -20,7 +20,7 @@ router = APIRouter(
     }
 )
 
-@router.post(
+@router.get(
     "/generate-video",
     response_model=GenerateVideoResponse,
     status_code=status.HTTP_202_ACCEPTED,
@@ -29,10 +29,17 @@ router = APIRouter(
 )
 async def generate_video(
     background_tasks: BackgroundTasks,
-    payload: GenerateVideoDetails = Body(...)
+    background_image_key: str = Query(..., description="R2 object key for the background image."),
+    audio_file_key: str = Query(..., description="R2 object key for the audio file."),
+    callback_url: HttpUrl = Query(..., description="URL to send the callback to after processing.")
 ):
-    """Endpoint to start video generation using R2 object keys for source image and audio."""
+    """Endpoint to start video generation using R2 object keys for source image and audio via query parameters."""
     try:
+        payload = GenerateVideoDetails(
+            background_image_key=background_image_key,
+            audio_file_key=audio_file_key,
+            callback_url=callback_url
+        )
         task = task_service.create_task(TaskType.GENERATE_VIDEO, payload)
         background_tasks.add_task(run_generate_video_task, task.id)
         return GenerateVideoResponse(

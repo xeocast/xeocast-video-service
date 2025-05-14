@@ -7,6 +7,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, HTTPException, status
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
+from fastapi.middleware.cors import CORSMiddleware
 
 from app.controllers import health, tasks, video, test_callback, youtube_auth
 from app.routers import youtube_playlists
@@ -39,6 +40,15 @@ app = FastAPI(
     description="API for generating and publishing videos asynchronously.",
     version="0.1.0",
     lifespan=lifespan
+)
+
+# --- CORS Middleware Configuration ---
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Allows all origins
+    allow_credentials=True,
+    allow_methods=["*"],  # Allows all methods
+    allow_headers=["*"],  # Allows all headers
 )
 
 # --- Middleware for Signed URL Verification ---
