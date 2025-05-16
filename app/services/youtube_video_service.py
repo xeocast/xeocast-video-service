@@ -7,8 +7,9 @@ from googleapiclient.http import MediaFileUpload # Needs google-api-python-clien
 from google.oauth2.credentials import Credentials
 from google.auth.exceptions import RefreshError
 from google.auth.transport.requests import Request as GoogleAuthRequest # Added import
+from pydantic import HttpUrl # Ensure HttpUrl is imported if used in payload
 
-from app.models.api_models import YouTubeVideoUploadRequest, TaskStatus, CallbackPayload
+from app.models.api_models import YouTubeVideoUploadRequest, TaskStatus, YouTubeUploadCallbackPayload # Changed from CallbackPayload
 from app.services.task_service import task_service
 from app.services.youtube_oauth_service import youtube_oauth_service
 from app.services.r2_service import r2_service # Make sure r2_service is imported
@@ -18,7 +19,7 @@ from app.models.settings import settings
 logger = logging.getLogger(__name__)
 
 class YouTubeVideoService:
-    async def _send_callback(self, url: str, payload: CallbackPayload):
+    async def _send_callback(self, url: str, payload: YouTubeUploadCallbackPayload): # Changed payload type
         # try:
         #     async with httpx.AsyncClient(timeout=settings.CALLBACK_TIMEOUT_SECONDS) as client:
         #         response = await client.post(url, json=payload.model_dump())
@@ -51,6 +52,7 @@ class YouTubeVideoService:
         callback_url_str = str(upload_details.callback_url)
         video_file_path: Optional[Path] = None
         thumbnail_file_path: Optional[Path] = None
+        video_id: Optional[str] = None # Ensure video_id is defined in this scope
 
         try:
             task_service.set_task_processing(task_id)
@@ -83,12 +85,16 @@ class YouTubeVideoService:
             temp_download_dir.mkdir(parents=True, exist_ok=True)
 
             video_file_path = temp_download_dir / upload_details.video_file_key.split('/')[-1] # Get filename from key
-            thumbnail_file_path = temp_download_dir / upload_details.video_thumbnail_key.split('/')[-1]
-
             logger.info(f"Downloading video '{upload_details.video_file_key}' from bucket '{r2_bucket}' to '{video_file_path}'")
-            r2_service.download_file(r2_bucket, upload_details.video_file_key, video_file_path)
-            logger.info(f"Downloading thumbnail '{upload_details.video_thumbnail_key}' from bucket '{r2_bucket}' to '{thumbnail_file_path}'")
-            r2_service.download_file(r2_bucket, upload_details.video_thumbnail_key, thumbnail_file_path)
+            r2_service.download_file(r2_bucket, upload_details.video_file_key, str(video_file_path)) # Ensure path is string
+
+            if upload_details.video_thumbnail_key:
+                thumbnail_file_path = temp_download_dir / upload_details.video_thumbnail_key.split('/')[-1]
+                logger.info(f"Downloading thumbnail '{upload_details.video_thumbnail_key}' from bucket '{r2_bucket}' to '{thumbnail_file_path}'")
+                r2_service.download_file(r2_bucket, upload_details.video_thumbnail_key, str(thumbnail_file_path)) # Ensure path is string
+            else:
+                thumbnail_file_path = None
+                logger.info(f"No thumbnail key provided for task {task_id}. Skipping thumbnail download.")
 
             # 3. Initialize YouTube API Client
             youtube_api = build("youtube", "v3", credentials=credentials, static_discovery=False) # static_discovery=False for dynamic envs
@@ -125,11 +131,16 @@ class YouTubeVideoService:
             logger.info(f"Video {video_id} uploaded successfully for task {task_id}.")
 
             # 5. Set Thumbnail
-            youtube_api.thumbnails().set(
-                videoId=video_id,
-                media_body=MediaFileUpload(str(thumbnail_file_path))
-            ).execute()
-            logger.info(f"Thumbnail set for video {video_id} for task {task_id}.")
+            if thumbnail_file_path and thumbnail_file_path.exists(): # Check if thumbnail was downloaded and exists
+                youtube_api.thumbnails().set(
+                    videoId=video_id,
+                    media_body=MediaFileUpload(str(thumbnail_file_path))
+                ).execute()
+                logger.info(f"Thumbnail set for video {video_id} for task {task_id}.")
+            elif upload_details.video_thumbnail_key: # Log if key was provided but file is missing (shouldn't happen if download worked)
+                logger.warning(f"Thumbnail key was provided for video {video_id} but file not found at {thumbnail_file_path}. Skipping thumbnail set.")
+            else: # No key provided, so no thumbnail to set
+                logger.info(f"No thumbnail to set for video {video_id} as no key was provided.")
 
             # 6. Add to Playlist (if playlist_id is provided)
             if video_id and upload_details.playlist_id:
@@ -204,7 +215,12 @@ class YouTubeVideoService:
             task_service.set_task_completed(task_id, result={"youtube_video_id": video_id, "youtube_video_url": youtube_video_url, "comment_id": comment_id_to_pin})
             logger.info(f"Task {task_id} completed successfully. YouTube Video ID: {video_id}")
             
-            payload = CallbackPayload(taskId=task_id, status="completed", video_url=youtube_video_url)
+            payload = YouTubeUploadCallbackPayload( # Changed here
+                taskId=task_id,
+                status="completed",
+                youtube_video_id=video_id, # Added this field
+                youtube_video_url=HttpUrl(youtube_video_url) # Ensured HttpUrl, was video_url
+            )
             await self._send_callback(callback_url_str, payload)
 
         except Exception as e:
@@ -212,18 +228,29 @@ class YouTubeVideoService:
             logger.error(error_message, exc_info=True)
             task_service.set_task_error(task_id, error_message)
             
-            payload = CallbackPayload(taskId=task_id, status="error", error=error_message)
+            payload = YouTubeUploadCallbackPayload( # Changed here
+                taskId=task_id,
+                status="error",
+                error=error_message
+            )
             await self._send_callback(callback_url_str, payload)
 
         finally:
             # Clean up downloaded files
-            for file_p in [video_file_path, thumbnail_file_path]:
-                if file_p and file_p.exists():
-                    try:
-                        os.remove(file_p)
-                        logger.info(f"Cleaned up temporary file: {file_p}")
-                    except OSError as e_os:
-                        logger.error(f"Error deleting temporary file {file_p}: {e_os}")
+            if video_file_path and video_file_path.exists(): # Always try to clean up video
+                try:
+                    os.remove(video_file_path)
+                    logger.info(f"Cleaned up temporary file: {video_file_path}")
+                except OSError as e_os:
+                    logger.error(f"Error deleting temporary file {video_file_path}: {e_os}")
+            
+            if thumbnail_file_path and thumbnail_file_path.exists(): # Only try to clean up thumbnail if it was processed
+                try:
+                    os.remove(thumbnail_file_path)
+                    logger.info(f"Cleaned up temporary file: {thumbnail_file_path}")
+                except OSError as e_os:
+                    logger.error(f"Error deleting temporary file {thumbnail_file_path}: {e_os}")
+            
             # Clean up task-specific directory if empty
             if 'temp_download_dir' in locals() and temp_download_dir.exists() and not any(temp_download_dir.iterdir()):
                 try:

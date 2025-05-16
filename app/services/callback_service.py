@@ -2,16 +2,20 @@ import httpx
 import logging
 from typing import Optional
 
-from app.models.api_models import CallbackPayload, TaskStatus
+from pydantic import BaseModel
+from app.models.api_models import TaskStatus
 
 logger = logging.getLogger(__name__)
 
 class CallbackService:
-    async def send_callback(self, url: str, payload: CallbackPayload):
+    async def send_callback(self, url: str, payload: BaseModel):
         """Sends a POST request with the payload to the specified callback URL."""
         try:
             async with httpx.AsyncClient() as client:
-                response = await client.post(url, json={"data": payload.model_dump(by_alias=True)}, timeout=30.0) # Use by_alias for taskId
+                # Use mode='json' to ensure HttpUrl and other Pydantic types are serialized to strings
+                request_body = payload.model_dump(mode='json', by_alias=True)
+                logger.info(f"Sending callback request body: {request_body}")
+                response = await client.post(url, json=request_body, timeout=30.0) # Use by_alias for taskId
                 response.raise_for_status() # Raise exception for non-2xx responses
                 logger.info(f"Callback sent successfully to {url}. Status: {response.status_code}")
         except httpx.RequestError as e:

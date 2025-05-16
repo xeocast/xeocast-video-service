@@ -20,7 +20,13 @@ COPY requirements.txt requirements.txt
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir --default-timeout=100 -r requirements.txt
 
+# Create a non-root user and group
+RUN addgroup --system appuser && adduser --system --ingroup appuser appuser
+
 # 5. Copy the rest of the application's code into the container at /app
+# Ensure /app exists and set ownership before copying files if needed, though WORKDIR should create it.
+# If specific ownership is needed for /app itself before copying, add RUN mkdir -p /app && chown appuser:appuser /app
+# COPY . . will copy files owned by root. We'll chown after.
 # If you have a specific app directory (e.g., ./app), you might want to copy that specifically:
 # COPY ./app /app/app
 # COPY ./models /app/models
@@ -28,6 +34,9 @@ RUN pip install --no-cache-dir --upgrade pip && \
 # COPY ./controllers /app/controllers
 # For now, let's assume your app is in the root or organized within subdirectories that can be copied all at once.
 COPY . .
+
+# Change ownership of the app directory to the non-root user
+RUN chown -R appuser:appuser /app
 
 # 6. Make port 8000 available to the world outside this container
 # This is informational; the actual port mapping is done in docker-compose.yml
@@ -39,6 +48,9 @@ EXPOSE 8000
 # Using --host 0.0.0.0 to make it accessible from outside the container (e.g., by cloudflared service)
 # The --port will be 8000 as exposed.
 # Add --reload for development if you want uvicorn to auto-reload on code changes (not recommended for production images)
+# Switch to the non-root user
+USER appuser
+
 # CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
 # Based on your project structure (MVC), it's likely your main app is in a subdirectory like 'app' or 'src'.
 # Assuming your FastAPI app instance is named `app` in a file named `main.py` inside an `app` directory (i.e., `app/main.py`)

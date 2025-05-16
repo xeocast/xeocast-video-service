@@ -6,7 +6,7 @@ import os
 import uuid
 from pydantic import HttpUrl
 
-from app.models.api_models import TaskMetadata, TaskStatus, GenerateVideoDetails, UploadYoutubeVideoDetails, CallbackPayload
+from app.models.api_models import TaskMetadata, TaskStatus, GenerateVideoDetails, UploadYoutubeVideoDetails, GenerateVideoCallbackPayload
 from app.services.task_service import task_service
 from app.services.video_service import video_service
 from app.services.file_downloader import file_downloader_service
@@ -24,7 +24,7 @@ async def _send_final_callback(task: TaskMetadata, status: TaskStatus, r2_object
 
     # The original logic for generating presigned URL is removed.
 
-    callback_payload = CallbackPayload(
+    callback_payload = GenerateVideoCallbackPayload(
         taskId=task.id,
         status=status.value, # Use 'completed' or 'error' string
         video_bucket_key=r2_object_key, # Pass the R2 object key directly
@@ -146,111 +146,65 @@ async def run_upload_youtube_video_task(task_id: str):
     local_video_path_for_upload: Optional[Path] = None # The definitive local path of the video to be uploaded to YT
     error_message: Optional[str] = None
     final_status: TaskStatus = TaskStatus.ERROR
-    youtube_video_id: Optional[str] = None
-    loop = asyncio.get_running_loop()
-    cleanup_local_video_path_for_upload = False # Flag to cleanup this specific file if it was downloaded/copied
+    youtube_video_id_from_service: Optional[str] = None # To store result from youtube_service
+    youtube_video_url_from_service: Optional[HttpUrl] = None # To store result from youtube_service
+    # comment_id_from_service: Optional[str] = None # If needed from result
 
     try:
-        # Check if details.video_url is an R2 key (e.g., "r2://bucket/key" or just "key" convention)
-        # For now, assume if it's not a valid HttpUrl, it might be an R2 key. This logic could be more robust.
-        # Or, the PublishVideoDetails model could be changed to specify source_type (url vs r2_key)
-        is_r2_source = not str(details.video_url).startswith(("http://", "https://")) 
-        # A more robust check would be to attempt parsing as HttpUrl and if it fails, treat as R2 key, or add a field to model.
-        # Let's assume for now: if it's a key, it refers to OUR R2_VIDEO_OUTPUT_BUCKET.
-
-        if is_r2_source:
-            # If video_url is actually an R2 key for a video already in our output bucket
-            r2_key_as_str = str(details.video_url) 
-            logger.info(f"Task {task_id}: Video source is an R2 key: {r2_key_as_str}. Assuming it's in output bucket.")
-            # Download it locally for YouTube upload
-            # Create a unique temp name for this download
-            temp_dl_filename = f"publish_{task_id}_{uuid.uuid4().hex}_{r2_key_as_str.split('/')[-1]}"
-            video_path_temp = file_downloader_service.temp_dir / temp_dl_filename
-            
-            await loop.run_in_executor(None, r2_service.download_file, settings.R2_VIDEO_OUTPUT_BUCKET, r2_key_as_str, str(video_path_temp))
-            # ^^^ NOTE: r2_service.download_file does not exist. It should be download_file_from_bucket or similar.
-            # Correcting to a conceptual download from output bucket (assuming such method exists or is added to R2Service)
-            # For now, let's use a placeholder for actual download from output bucket:
-            # This part needs r2_service to have a generic download_file(bucket, key, dest) method.
-            # Let's assume download_r2_source_file can take a bucket argument or we add a new one.
-            # For simplicity, let's assume the key exists in R2_VIDEO_OUTPUT_BUCKET
-            # This will be used if a user wants to publish a video they previously generated with our service.
-
-            # For now, let's assume r2_service has: download_file_from_bucket(bucket_name, key, dest_path)
-            # This method isn't in the current R2Service, so this part will need adjustment to R2Service or this logic.
-            # For the purpose of this refactor, let's assume it's downloaded:
-            # video_path_temp = await file_downloader_service.download_r2_general(bucket=settings.R2_VIDEO_OUTPUT_BUCKET, key=r2_key_as_str, task_id=task_id)
-            # This is a placeholder for a function that would download from a *specified* R2 bucket (output bucket in this case).
-            # Given current r2_service, we cannot directly download from R2_VIDEO_OUTPUT_BUCKET using a simple method yet.
-            # This highlights a potential need for a generic download in r2_service or a change in publish flow.
-            
-            # *** Major Simplification for now: Assume video_url is always a public URL if not an R2 key from generate-video flow ***
-            # This means if user provides an "R2 key" it must be one they got from *our* generate-video. The presigned URL from that would be the input here.
-            # If `details.video_url` IS a key, it means it's a key that *we* manage in R2_VIDEO_OUTPUT_BUCKET.
-            # For now, we will proceed assuming `details.video_url` is always a downloadable HTTP URL.
-            # The scenario of "publishing an existing R2 object by its key" needs more robust handling or clarification.
-            # Fallback to assuming it's a URL to download if is_r2_source logic is tricky.
-            logger.warning(f"Task {task_id}: Treating video_url as a public URL for download. R2 key direct publish needs review.")
-            # Fall through to standard URL download logic
-
-        # 1. Download the video file if it's a URL
-        logger.info(f"Task {task_id}: Downloading video from {details.video_url} for publishing.")
-        video_path_temp = await file_downloader_service.download_file(str(details.video_url), task_id)
-        local_video_path_for_upload = video_path_temp # This is the file to upload to YT
-        cleanup_local_video_path_for_upload = True    # And it needs cleanup
-
-        # 2. (Optional) Copy to our R2 output bucket if not already there or if policy is to always have a copy.
-        # For now, we assume the primary goal is YouTube upload. If the video came from an external URL,
-        # we upload it to YT. We *could* also save it to our R2_VIDEO_OUTPUT_BUCKET.
-        # Let's assume we DO want to store it in our R2 for consistency and a signed URL.
-        output_r2_filename = video_service._generate_video_filename(f"upload_yt_{task_id}") # Unique name for our R2
-        logger.info(f"Task {task_id}: Uploading downloaded video to our R2 as {output_r2_filename}")
-        r2_output_object_key = await loop.run_in_executor(
-            None, 
-            r2_service.upload_file_to_output_bucket, 
-            local_video_path_for_upload, 
-            output_r2_filename
-        )
-        logger.info(f"Task {task_id}: Video copied to R2 with key: {r2_output_object_key}")
-
-        # 3. Upload to YouTube
-        logger.info(f"Task {task_id}: Attempting YouTube upload of {local_video_path_for_upload}.")
-        youtube_video_id = await youtube_service.upload_video(local_video_path_for_upload, details) # Pass PublishVideoDetails directly
-
-        if youtube_video_id:
-            logger.info(f"Task {task_id}: Successfully uploaded to YouTube with ID: {youtube_video_id}")
-            final_status = TaskStatus.COMPLETED
-        else:
-            error_message = "YouTube upload failed or returned no ID."
-            logger.error(f"Task {task_id}: {error_message}")
-            # If R2 upload succeeded, this is a partial success.
-            # For now, if YT fails, the whole task is marked error for simplicity of callback.
-            final_status = TaskStatus.ERROR 
-
-    except (ConnectionError, ValueError, IOError, RuntimeError) as e:
-        logger.error(f"Task {task_id}: Failed during video publishing process: {e}", exc_info=True)
-        error_message = f"Task failed: {e}"
-        final_status = TaskStatus.ERROR
-    except Exception as e:
-        logger.exception(f"Task {task_id}: An unexpected error occurred during publish: {e}", exc_info=True)
-        error_message = f"An unexpected error occurred: {e}"
-        final_status = TaskStatus.ERROR
-    finally:
-        # 4. Send Callback - use r2_output_object_key for the R2 URL if available
-        # The primary result for 'publish' is the YouTube ID, but we also provide our R2 URL.
-        result_data_for_task_db = {}
-        if final_status == TaskStatus.COMPLETED:
-            if r2_output_object_key: result_data_for_task_db['r2_object_key'] = r2_output_object_key
-            if youtube_video_id: result_data_for_task_db['youtube_video_id'] = youtube_video_id
+        # This task is now primarily a wrapper for youtube_video_service.process_upload_task
+        # The youtube_video_service.process_upload_task handles its own status updates and callbacks.
+        # We just need to call it and await its completion.
         
-        # _send_final_callback's third argument is the R2 key for *our* generated/stored video's signed URL
-        await _send_final_callback(task, final_status, r2_output_object_key, error_message)
-        if result_data_for_task_db: # Update task result with more specific info if publish was successful
-            task_service.update_task_result(task_id, result_data_for_task_db)
+        # Ensure task details are correctly parsed if needed here, though process_upload_task does it too.
+        # upload_details = YouTubeVideoUploadRequest(**task.details) # Already done in process_upload_task
 
-        # 5. Cleanup temporary downloaded file (if one was created for YT upload)
-        if local_video_path_for_upload and cleanup_local_video_path_for_upload and local_video_path_for_upload.exists():
-            logger.info(f"Task {task_id}: Cleaning up temporary source video file: {local_video_path_for_upload}")
-            await loop.run_in_executor(None, file_downloader_service.cleanup_temp_file, local_video_path_for_upload)
+        # The actual processing and callback sending is delegated to YouTubeVideoService.
+        await youtube_video_service.process_upload_task(task_id) 
+        
+        # After youtube_video_service.process_upload_task completes, the task status in the database
+        # will be updated by it (COMPLETED or ERROR), and the callback will have been sent by it.
+        # We can retrieve the final status and result if needed for logging here, but no separate callback.
+        updated_task = task_service.get_task(task_id) # Get the latest task status
+        if updated_task:
+            final_status = updated_task.status
+            if updated_task.result:
+                youtube_video_id_from_service = updated_task.result.get('youtube_video_id')
+                youtube_video_url_str = updated_task.result.get('youtube_video_url')
+                if youtube_video_url_str: # Convert string back to HttpUrl if needed for local use
+                    try:
+                        youtube_video_url_from_service = HttpUrl(youtube_video_url_str)
+                    except Exception:
+                        logger.warning(f"Task {task_id}: Could not parse youtube_video_url from result: {youtube_video_url_str}")
+            logger.info(f"Task {task_id}: YouTube processing via service completed. Final status: {final_status}")
+        else:
+            logger.error(f"Task {task_id}: Task object not found after YouTube service processing.")
+            final_status = TaskStatus.ERROR # Fallback status
 
-        logger.info(f"Background task finished: Upload YouTube Video {task_id}. Final Status: {final_status}. R2 Key: {r2_output_object_key}, YT ID: {youtube_video_id}") 
+    except Exception as e:
+        # This top-level exception catch is a fallback.
+        # Most errors should be caught within youtube_video_service.process_upload_task,
+        # which then sets task status and sends an error callback.
+        error_message = f"Critical error in run_upload_youtube_video_task for {task_id}: {e}"
+        logger.exception(error_message, exc_info=True)
+        task_service.set_task_error(task_id, error_message) # Ensure task is marked as error
+        final_status = TaskStatus.ERROR
+        # Potentially send a generic callback here if process_upload_task failed catastrophically before sending its own.
+        # However, youtube_video_service.process_upload_task has its own robust try/except/finally for callbacks.
+        # So, an additional callback here might be redundant or cause double callbacks.
+        # For now, we rely on youtube_video_service to send its callback.
+
+    finally:
+        # The callback is now handled by youtube_video_service.process_upload_task.
+        # No need to call _send_final_callback here for YouTube upload tasks.
+        # logger.info(f"Background task finished: Upload YouTube Video {task_id}. Final Status: {final_status}. YouTube ID: {youtube_video_id_from_service}")
+
+        # Cleanup of local files (e.g., video_path_temp, if it were managed here) is also handled by youtube_video_service.process_upload_task
+        # The existing run_generate_video_task shows cleanup logic; similar isolated cleanup might be needed if this task did downloads directly.
+        # But since process_upload_task handles downloads and their cleanup, no direct action here.
+        pass # No specific cleanup or callback sending action in this finally block for this task type.
+
+# Register tasks with a dictionary for dynamic calling if desired, or call directly.
+# background_task_runners = {
+# ... existing code ...
+
+# ... rest of the file remains unchanged ... 

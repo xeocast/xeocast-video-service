@@ -1,0 +1,17 @@
+services:
+  api:
+    build:
+      context: .
+      # dockerfile: Dockerfile # Optional: specify if your Dockerfile has a different name or location
+    ports:
+      - "8765:8000" # Exposes port 8765 on the host and maps it to port 8000 in the container
+    env_file:
+      - ./.env # Loads environment variables from .env file in the project root
+    environment:
+      - APP_ENV=production # Set application environment to production
+    volumes:
+      - .:/app # Mounts the current directory into /app in the container for development
+      - /tmp-auth:/tmp-auth # Mounts /tmp-auth for persisting YouTube Data API access tokens
+    # command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload # Example command, adjust as per your Dockerfile CMD/ENTRYPOINT
+
+volumes: {} # Define any named volumes here if needed 

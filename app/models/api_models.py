@@ -71,10 +71,17 @@ class GetAllTasksResponse(RootModel[List[TaskMetadata]]):
 
 # --- Callback Models ---
 
-class CallbackPayload(BaseModel):
+class GenerateVideoCallbackPayload(BaseModel):
     taskId: str
     status: Literal["completed", "error"]
     video_bucket_key: Optional[str] = None # Key for the video in R2 bucket
+    error: Optional[str] = None
+
+class YouTubeUploadCallbackPayload(BaseModel):
+    taskId: str
+    status: Literal["completed", "error"]
+    youtube_video_url: Optional[HttpUrl] = None # URL of the uploaded YouTube video
+    youtube_video_id: Optional[str] = None # ID of the uploaded YouTube video
     error: Optional[str] = None
 
 # --- Test Callback Models ---
@@ -102,7 +109,7 @@ class YouTubeVideoUploadRequest(BaseModel):
     callback_url: HttpUrl = Field(..., description="URL to send the callback to after processing.")
     youtube_channel_id: str = Field(..., description="YouTube channel ID for retrieving the access token.")
     video_file_key: str = Field(..., description="Key of the video file in the R2 bucket.")
-    video_thumbnail_key: str = Field(..., description="Key of the video thumbnail in the R2 bucket.")
+    video_thumbnail_key: Optional[str] = Field(None, description="Key of the video thumbnail in the R2 bucket.")
     title: str = Field(..., max_length=100, description="Title of the YouTube video.")
     description: str = Field(..., max_length=5000, description="Description of the YouTube video.")
     category_id: str = Field(..., description="Category ID of the YouTube video.")

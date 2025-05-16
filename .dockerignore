@@ -1,0 +1,53 @@
+# Git
+.git
+.gitignore
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environment
+.env
+.venv
+venv/
+env/
+ENV/
+
+# IDEs and editors
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# Tests
+tests/
+*.test.py
+pytest.ini
+.pytest_cache/
+
+# Coverage data
+.coverage
+coverage.xml
+htmlcov/
+
+# Build artifacts
+build/
+dist/
+*.egg-info/
+*.egg
+
+# Notebooks
+.ipynb_checkpoints
+
+# Local configuration / secrets
+*.local
+secrets/
+.secrets
+
+# Docker
+Dockerfile.*
