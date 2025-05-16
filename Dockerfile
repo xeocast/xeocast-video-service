@@ -35,7 +35,12 @@ RUN addgroup --system appuser && adduser --system --ingroup appuser appuser
 # For now, let's assume your app is in the root or organized within subdirectories that can be copied all at once.
 COPY . .
 
-# Change ownership of the app directory to the non-root user
+# Create directories for volumes if they weren't copied from the source context,
+# ensuring they exist before the main chown operation.
+# These paths correspond to named volumes: /app/tmp-auth
+RUN mkdir -p /app/tmp-auth
+
+# Change ownership of the entire /app directory and all its contents (including the dirs above) to the non-root user
 RUN chown -R appuser:appuser /app
 
 # 6. Make port 8000 available to the world outside this container
