@@ -40,6 +40,10 @@ COPY . .
 # These paths correspond to named volumes: /app/tmp-auth, /app/static, /app/tmp
 RUN mkdir -p /app/tmp-auth /app/static /app/tmp
 
+# Create Numba cache directory and set environment variable
+RUN mkdir -p /app/.numba_cache
+ENV NUMBA_CACHE_DIR /app/.numba_cache
+
 # Change ownership of the entire /app directory and all its contents (including the dirs above) to the non-root user
 RUN chown -R appuser:appuser /app
 
