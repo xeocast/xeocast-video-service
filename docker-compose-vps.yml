@@ -2,7 +2,7 @@ services:
   api:
     image: xeocast/xeocast-video-service:latest
     ports:
-      - "8765:8000" # Exposes port 8000 on the host and maps it to port 8000 in the container
+      - "2052:8000" # Exposes port 8000 on the host and maps it to port 8000 in the container
     env_file:
       - ./.env # Loads environment variables from .env file in the project root
     environment:

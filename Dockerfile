@@ -37,8 +37,8 @@ COPY . .
 
 # Create directories for volumes if they weren't copied from the source context,
 # ensuring they exist before the main chown operation.
-# These paths correspond to named volumes: /app/tmp-auth
-RUN mkdir -p /app/tmp-auth
+# These paths correspond to named volumes: /app/tmp-auth, /app/static, /app/tmp
+RUN mkdir -p /app/tmp-auth /app/static /app/tmp
 
 # Change ownership of the entire /app directory and all its contents (including the dirs above) to the non-root user
 RUN chown -R appuser:appuser /app
