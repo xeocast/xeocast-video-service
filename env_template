@@ -33,12 +33,12 @@ PROD_PORT=8000
 # R2_RW_SECRET_ACCESS_KEY="your_r2_read_write_secret_access_key"
 
 # Bucket Names (defaults are usually fine, set in settings.py based on APP_ENV)
-# R2_CLIENT_SECRETS_BUCKET_PROD="video-service-files"
-# R2_DEFAULT_FILES_BUCKET_PROD="default-files"
-# R2_EPISODE_PROJECTS_BUCKET_PROD="episode-projects"
-# R2_CLIENT_SECRETS_BUCKET_DEV="video-service-files" 
-# R2_DEFAULT_FILES_BUCKET_DEV="default-files-preview"
-# R2_EPISODE_PROJECTS_BUCKET_DEV="episode-projects-preview"
+R2_CLIENT_SECRETS_BUCKET_PROD=video-service-files
+R2_DEFAULT_FILES_BUCKET_PROD=default-files
+R2_EPISODE_PROJECTS_BUCKET_PROD=episode-projects
+R2_CLIENT_SECRETS_BUCKET_DEV=video-service-files 
+R2_DEFAULT_FILES_BUCKET_DEV=default-files-preview
+R2_EPISODE_PROJECTS_BUCKET_DEV=episode-projects-preview
 
 # --- Cloudflare Tunnel ---
 CLOUDFLARE_TUNNEL_TOKEN="your_cloudflare_tunnel_token"
