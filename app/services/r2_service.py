@@ -94,25 +94,41 @@ class R2Service:
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="R2 Read-Only service not configured."
             )
-        bucket_name = settings.R2_VIDEO_SOURCE_BUCKET
+        
+        if not file_key:
+            logger.error("File key is empty, cannot determine source bucket.")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Source file key cannot be empty."
+            )
+
+        if file_key[0].isdigit():
+            bucket_name = settings.R2_EPISODE_PROJECTS_BUCKET
+            bucket_type_for_log = "episode-projects"
+        else:
+            bucket_name = settings.R2_DEFAULT_FILES_BUCKET
+            bucket_type_for_log = "default-files"
+        
+        logger.info(f"Attempting to download '{file_key}' from {bucket_type_for_log} bucket '{bucket_name}' to '{destination_path}'")
+
         try:
             self.s3_ro_client.download_file(bucket_name, file_key, str(destination_path))
             logger.info(f"Successfully downloaded {file_key} from {bucket_name} to {destination_path}")
             return destination_path
         except ClientError as e:
-            if e.response['Error']['Code'] == '404': # Note: S3/R2 might return 404 for NoSuchKey on download_file
-                logger.error(f"File not found in R2 source bucket: {bucket_name}/{file_key}")
+            if e.response['Error']['Code'] == '404' or 'NoSuchKey' in str(e):
+                logger.error(f"File not found in R2 {bucket_type_for_log} bucket: {bucket_name}/{file_key}")
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
-                    detail=f"Source file '{file_key}' not found in bucket '{bucket_name}'."
+                    detail=f"Source file '{file_key}' not found in {bucket_type_for_log} bucket '{bucket_name}'."
                 )
-            logger.error(f"Error downloading file from R2 source bucket {bucket_name}/{file_key}: {e}")
+            logger.error(f"Error downloading file from R2 {bucket_type_for_log} bucket {bucket_name}/{file_key}: {e}")
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=f"Could not download source file from R2: {e}"
             )
         except Exception as e:
-            logger.error(f"Unexpected error downloading R2 source file {file_key}: {e}")
+            logger.error(f"Unexpected error downloading R2 source file {file_key} from {bucket_type_for_log} bucket: {e}")
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="An unexpected error occurred while downloading the source file."
@@ -156,7 +172,7 @@ class R2Service:
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="R2 Read-Write service not configured."
             )
-        bucket_name = settings.R2_VIDEO_OUTPUT_BUCKET
+        bucket_name = settings.R2_EPISODE_PROJECTS_BUCKET
         try:
             self.s3_rw_client.upload_file(str(file_path), bucket_name, object_key)
             logger.info(f"Successfully uploaded {file_path} to {bucket_name}/{object_key}")
@@ -183,7 +199,7 @@ class R2Service:
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="R2 service not configured for generating presigned URLs."
             )
-        bucket_name = settings.R2_VIDEO_OUTPUT_BUCKET
+        bucket_name = settings.R2_EPISODE_PROJECTS_BUCKET
         try:
             # Using s3_ro_client, assuming it has GetObject permission on the output bucket,
             # which is typical for generating read URLs. 

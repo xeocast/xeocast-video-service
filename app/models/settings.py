@@ -33,18 +33,18 @@ class Settings(BaseSettings):
 
     # Bucket Names (Production)
     R2_CLIENT_SECRETS_BUCKET_PROD: str = "video-service-files"
-    R2_VIDEO_SOURCE_BUCKET_PROD: str = "video-source-files"
-    R2_VIDEO_OUTPUT_BUCKET_PROD: str = "video-output-files"
+    R2_DEFAULT_FILES_BUCKET_PROD: str = "default-files"
+    R2_EPISODE_PROJECTS_BUCKET_PROD: str = "episode-projects" # For source (if numeric key) and all output
 
     # Bucket Names (Development)
     R2_CLIENT_SECRETS_BUCKET_DEV: str = "video-service-files" # Assuming same for secrets
-    R2_VIDEO_SOURCE_BUCKET_DEV: str = "video-source-files-preview"
-    R2_VIDEO_OUTPUT_BUCKET_DEV: str = "video-output-files-preview"
+    R2_DEFAULT_FILES_BUCKET_DEV: str = "default-files-preview"
+    R2_EPISODE_PROJECTS_BUCKET_DEV: str = "episode-projects-preview" # For source (if numeric key) and all output
 
     # Resolved Bucket Names (set by validator)
     R2_CLIENT_SECRETS_BUCKET: str = ""
-    R2_VIDEO_SOURCE_BUCKET: str = ""
-    R2_VIDEO_OUTPUT_BUCKET: str = ""
+    R2_DEFAULT_FILES_BUCKET: str = ""
+    R2_EPISODE_PROJECTS_BUCKET: str = ""
 
     # YouTube OAuth Settings
     YOUTUBE_SCOPES: list[str] = [
@@ -83,13 +83,13 @@ class Settings(BaseSettings):
         if app_env == "production":
             current_base_url = prod_base_url
             values.R2_CLIENT_SECRETS_BUCKET = values.R2_CLIENT_SECRETS_BUCKET_PROD
-            values.R2_VIDEO_SOURCE_BUCKET = values.R2_VIDEO_SOURCE_BUCKET_PROD
-            values.R2_VIDEO_OUTPUT_BUCKET = values.R2_VIDEO_OUTPUT_BUCKET_PROD
+            values.R2_DEFAULT_FILES_BUCKET = values.R2_DEFAULT_FILES_BUCKET_PROD
+            values.R2_EPISODE_PROJECTS_BUCKET = values.R2_EPISODE_PROJECTS_BUCKET_PROD
         else: # Default to development
             current_base_url = dev_base_url
             values.R2_CLIENT_SECRETS_BUCKET = values.R2_CLIENT_SECRETS_BUCKET_DEV
-            values.R2_VIDEO_SOURCE_BUCKET = values.R2_VIDEO_SOURCE_BUCKET_DEV
-            values.R2_VIDEO_OUTPUT_BUCKET = values.R2_VIDEO_OUTPUT_BUCKET_DEV
+            values.R2_DEFAULT_FILES_BUCKET = values.R2_DEFAULT_FILES_BUCKET_DEV
+            values.R2_EPISODE_PROJECTS_BUCKET = values.R2_EPISODE_PROJECTS_BUCKET_DEV
         
         values.BASE_URL = current_base_url
         values.YOUTUBE_REDIRECT_URI = f"{current_base_url}{oauth_callback_path}"

@@ -31,6 +31,7 @@ class BaseTaskDetails(BaseModel):
 class GenerateVideoDetails(BaseTaskDetails):
     background_image_key: str
     audio_file_key: str
+    output_bucket_key: str # Key where the generated video should be saved
 
 class GenerateVideoResponse(BaseModel):
     task_id: str

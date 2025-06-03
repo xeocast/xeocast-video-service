@@ -34,11 +34,11 @@ PROD_PORT=8000
 
 # Bucket Names (defaults are usually fine, set in settings.py based on APP_ENV)
 # R2_CLIENT_SECRETS_BUCKET_PROD="video-service-files"
-# R2_VIDEO_SOURCE_BUCKET_PROD="video-source-files"
-# R2_VIDEO_OUTPUT_BUCKET_PROD="video-output-files"
+# R2_DEFAULT_FILES_BUCKET_PROD="default-files"
+# R2_EPISODE_PROJECTS_BUCKET_PROD="episode-projects"
 # R2_CLIENT_SECRETS_BUCKET_DEV="video-service-files" 
-# R2_VIDEO_SOURCE_BUCKET_DEV="video-source-files-preview"
-# R2_VIDEO_OUTPUT_BUCKET_DEV="video-output-files-preview"
+# R2_DEFAULT_FILES_BUCKET_DEV="default-files-preview"
+# R2_EPISODE_PROJECTS_BUCKET_DEV="episode-projects-preview"
 
 # --- Cloudflare Tunnel ---
 CLOUDFLARE_TUNNEL_TOKEN="your_cloudflare_tunnel_token"

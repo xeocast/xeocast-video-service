@@ -70,8 +70,13 @@ async def run_generate_video_task(task_id: str):
         logger.info(f"Task {task_id}: Downloading audio file R2 key {details.audio_file_key}")
         audio_path_temp = await file_downloader_service.download_r2_source_file(details.audio_file_key, task_id)
 
-        # 2. Generate Video filename (this will also be the R2 object key)
-        output_filename = video_service._generate_video_filename(task_id)
+        # 2. Determine Output Filename/R2 Object Key from task details
+        # The output_bucket_key from the payload will be used as the R2 object key
+        # and also as the base for the local temporary filename.
+        if not details.output_bucket_key:
+            logger.error(f"Task {task_id}: output_bucket_key is missing from task details.")
+            raise ValueError("output_bucket_key is required but was not provided.")
+        output_filename = details.output_bucket_key # This is now the R2 object key
 
         # 3. Generate Video locally (CPU-bound)
         logger.info(f"Task {task_id}: Starting local video creation with MoviePy. Output filename: {output_filename}")
@@ -80,7 +85,7 @@ async def run_generate_video_task(task_id: str):
             video_service.create_video_from_image_audio,
             image_path_temp,
             audio_path_temp,
-            output_filename # This filename is used for the local temp file in static dir
+            Path(output_filename).name # Pass only the filename part for local temp storage, video_service prepends static_dir
         )
         logger.info(f"Task {task_id}: Local video created successfully at {output_video_path_local}")
 

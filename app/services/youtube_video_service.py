@@ -72,13 +72,13 @@ class YouTubeVideoService:
                     raise ValueError(f"Token refresh failed for channel {upload_details.youtube_channel_id}. Please re-authenticate.")
 
             # 2. Determine R2 bucket and download files
-            # Bucket name depends on environment, ensure settings has R2_VIDEO_OUTPUT_BUCKET_PROD and R2_VIDEO_OUTPUT_BUCKET_DEV
-            # This logic assumes your settings structure has a general R2_VIDEO_OUTPUT_BUCKET that is set based on ENV.
-            # If not, you might need settings.R2_VIDEO_OUTPUT_BUCKET_PROD/DEV directly.
-            # For this example, let's assume settings.R2_VIDEO_OUTPUT_BUCKET holds the correct one.
-            if not settings.R2_VIDEO_OUTPUT_BUCKET:
-                 raise ValueError("R2_VIDEO_OUTPUT_BUCKET is not configured in settings.")
-            r2_bucket = settings.R2_VIDEO_OUTPUT_BUCKET
+            # Bucket name depends on environment, ensure settings has R2_EPISODE_PROJECTS_BUCKET_PROD and R2_EPISODE_PROJECTS_BUCKET_DEV
+            # This logic assumes your settings structure has a general R2_EPISODE_PROJECTS_BUCKET that is set based on ENV.
+            # If not, you might need settings.R2_EPISODE_PROJECTS_BUCKET_PROD/DEV directly.
+            # For this example, let's assume settings.R2_EPISODE_PROJECTS_BUCKET holds the correct one.
+            if not settings.R2_EPISODE_PROJECTS_BUCKET:
+                 raise ValueError("R2_EPISODE_PROJECTS_BUCKET is not configured in settings.")
+            r2_bucket = settings.R2_EPISODE_PROJECTS_BUCKET
 
             # Create temporary directory for downloads if it doesn't exist
             temp_download_dir = settings.TMP_DIR / "yt_uploads" / task_id
